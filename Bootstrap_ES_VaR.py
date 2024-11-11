@@ -147,3 +147,132 @@ theta = 0.9
 simulated_data = GAtsim(sim, d, v, theta)
 
 
+#%% Second request to ChatGPT, this one worked.
+
+
+import numpy as np
+from scipy.optimize import fsolve
+
+def GAtsim(sim, d, v, theta):
+    """
+    Simulates data from the GAt distribution.
+    
+    Parameters:
+    sim (int): Number of simulations.
+    d (float): Parameter d of the GAt distribution.
+    v (float): Parameter v of the GAt distribution.
+    theta (float): Parameter theta of the GAt distribution.
+    
+    Returns:
+    np.ndarray: Simulated data from the GAt distribution.
+    """
+    x = np.zeros(sim)
+    lo = 1e-6
+    hi = 1 - lo
+    
+    for i in range(sim):
+        u = np.random.rand()
+        u = max(u, lo)
+        u = min(u, hi)
+        x[i] = GAtquantile(u, d, v, theta)
+        
+    return x
+
+def GAtquantile(p, d, v, theta):
+    """
+    Computes the quantile of the GAt distribution for a given probability p.
+    
+    Parameters:
+    p (float): Probability (0 < p < 1).
+    d (float): Parameter d of the GAt distribution.
+    v (float): Parameter v of the GAt distribution.
+    theta (float): Parameter theta of the GAt distribution.
+    
+    Returns:
+    float: Quantile corresponding to the probability p.
+    """
+    # Find lower bound for the quantile
+    lobound = 0
+    while ff(lobound, p, d, v, theta) >= 0:
+        lobound -= 4
+    
+    # Find upper bound for the quantile
+    hibound = 0
+    while ff(hibound, p, d, v, theta) <= 0:
+        hibound += 4
+    
+    # Use fsolve to find the root of the function, i.e., the quantile
+    tol = 1e-5
+    q = fsolve(lambda x: ff(x, p, d, v, theta), x0=(lobound + hibound) / 2, xtol=tol)[0]
+    
+    return q
+
+def ff(x, p, d, v, theta):
+    """
+    Helper function to compute the difference between the CDF at x and the probability p.
+    
+    Parameters:
+    x (float): Point at which to evaluate the CDF.
+    p (float): Target probability.
+    d (float): Parameter d of the GAt distribution.
+    v (float): Parameter v of the GAt distribution.
+    theta (float): Parameter theta of the GAt distribution.
+    
+    Returns:
+    float: Difference between CDF(x) and p.
+    """
+    _, cdf = GAt(x, d, v, theta)
+    return cdf - p
+
+def GAt(z, d, v, theta, K=1):
+    """
+    Computes the PDF and approximates the CDF of the GAt distribution.
+    
+    Parameters:
+    z (float): Point at which to evaluate the PDF and CDF.
+    d (float): Shape parameter.
+    v (float): Shape parameter.
+    theta (float): Skew parameter.
+    K (float): Normalizing constant, if known.
+    
+    Returns:
+    tuple: (pdf, cdf) values at point z.
+    """
+    # Calculate PDF using the GAt distribution formula
+    pdf = f_GAt(z, d, v, theta, K)
+    
+    # Approximate CDF by integrating the PDF from -∞ to z
+    from scipy.integrate import quad
+    cdf, _ = quad(lambda t: f_GAt(t, d, v, theta, K), -np.inf, z)
+    
+    return pdf, cdf
+
+def f_GAt(z, d, nu, theta, K=1):
+    """
+    PDF of the GAt distribution.
+    
+    Parameters:
+    z (float): Point at which to evaluate the PDF.
+    d (float): Shape parameter.
+    nu (float): Shape parameter.
+    theta (float): Skew parameter.
+    K (float): Normalizing constant, if known.
+    
+    Returns:
+    float: PDF value at z.
+    """
+    if any(param <= 0 for param in [d, nu, theta]):
+        raise ValueError("d, nu, or theta must be positive.")
+    
+    if z < 0:
+        return K * (1 + (-z * theta) ** d / nu) ** -(nu + 1 / d)
+    else:
+        return K * (1 + (z / theta) ** d / nu) ** -(nu + 1 / d)
+
+
+sim = 5000
+d = 2.0
+v = 1.5
+theta = 0.9
+
+simulated_data = GAtsim(sim, d, v, theta)
