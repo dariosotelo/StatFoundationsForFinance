@@ -104,23 +104,34 @@ def GAtquantile(p, d, v, theta):
     
     return q
 
-def ff(x, p, d, v, theta):
+
+
+
+
+def ff(x, p, d, v, theta, K=1):
     """
     Helper function to compute the difference between the CDF at x and the probability p.
     
     Parameters:
-    x (float): Point at which to evaluate the CDF.
+    x (float or array-like): Point at which to evaluate the CDF.
     p (float): Target probability.
-    d (float): Parameter d of the GAt distribution.
-    v (float): Parameter v of the GAt distribution.
-    theta (float): Parameter theta of the GAt distribution.
+    d (float): Shape parameter.
+    v (float): Shape parameter.
+    theta (float): Skew parameter.
     
     Returns:
     float: Difference between CDF(x) and p.
     """
-    #Underscore because we only care about the cdf, not the pdf
-    _, cdf = GAt(x, d, v, theta)
+    # If x is an array, extract the scalar value (fsolve may pass a one-element array)
+    if isinstance(x, np.ndarray):
+        x = x[0]
+        
+    # Calculate the PDF and CDF at x
+    _, cdf = GAt(x, d, v, theta, K)
+    
+    # Return the difference between CDF and p
     return cdf - p
+
 
 #Something is not working but it is related to the array the GAtsim function returns which is then used in ff
 #I was thinking on doing a for loop but i havent revised Paolellas code in detail.
