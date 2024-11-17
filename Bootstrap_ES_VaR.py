@@ -701,7 +701,7 @@ plt.show()
 
 def stabgen(nobs, a, b=0, c=1, d=0, seed=None):
     if seed is None:
-        seed = np.random.randint(0, 1234567)
+        seed = np.random.randint(0, 9999999)
     rng_V = np.random.default_rng(seed)
     rng_W = np.random.default_rng(seed + 42)
     
@@ -721,8 +721,8 @@ def stabgen(nobs, a, b=0, c=1, d=0, seed=None):
         x = c * x + d
     return x
 
-stable_sample = stabgen(10000, 1.5)
-nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(stable_sample, 0.01, 100, 7500)
+stable_sample = stabgen(10000, 1.7, -0.3)
+nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(stable_sample, 0.01, 100, 6667)
 bootstrap_samples_t, var_t = parametric_bootstrap_t(stable_sample, 0.01, 100, 10000)
 bootstrap_samples_nonc, var_nonc = parametric_bootstrap_nonc(stable_sample, 0.01, 100, 10000)
 bootstrap_samples_gaussian, var_gaussian = parametric_bootstrap_gaussian(stable_sample, 0.01, 100, 10000)
@@ -814,8 +814,8 @@ def generate_asymstab_samples(n, alpha, beta=0, mu=0, scale=1):
         samples[i] = brentq(lambda x: levy_stable.cdf(x, alpha, beta) - u[i], -1e6, 1e6)
     return mu + scale * samples
 
-asymstab_samples = generate_asymstab_samples(10000, 1.5)
-True_ES, True_VaR = asymstableES(0.01, 1.5)
+asymstab_samples = generate_asymstab_samples(10000, 1.7, -0.3)
+True_ES, True_VaR = asymstableES(0.01, 1.7, -0.3)
 
 nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(asymstab_samples, 0.01, 100, 7500)
 bootstrap_samples_t, var_t = parametric_bootstrap_t(asymstab_samples, 0.01, 100, 10000)
