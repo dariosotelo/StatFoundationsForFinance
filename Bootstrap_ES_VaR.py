@@ -849,3 +849,165 @@ plt.ylabel('VaR')
 plt.legend()
 plt.grid(True)
 plt.show()
+
+
+
+
+#%% Part 2
+
+import numpy as np
+from scipy.linalg import cho_solve, cho_factor
+from scipy.special import gammaln
+
+def mvnctpdf_ln(x, mu, gam, v, Sigma):
+    """
+    Direct density approximation (d.d.a.) for the log of the d-variate canonical MVNCT density.
+
+    Parameters:
+    x : ndarray
+        d x T matrix of evaluation points (each column is a point to evaluate).
+    mu : ndarray
+        d-length location vector.
+    gam : ndarray
+        d-length noncentrality vector.
+    v : float
+        Degrees of freedom.
+    Sigma : ndarray
+        Dispersion matrix (d x d covariance-like matrix).
+
+    Returns:
+    pdf_ln : ndarray
+        Logarithm of the probability density function at the evaluation points.
+    """
+    # Dimensions
+    d, T = x.shape
+
+    # Cholesky decomposition of Sigma
+    try:
+        C, lower = cho_factor(Sigma, lower=True, check_finite=True)
+    except np.linalg.LinAlgError:
+        raise ValueError("Sigma must be positive definite.")
+    
+    # Reshape inputs
+    mu = mu.reshape(-1, 1) if mu.ndim == 1 else mu
+    gam = gam.reshape(-1, 1) if gam.ndim == 1 else gam
+    vn2 = (v + d) / 2
+
+    # Center x and compute normalized x
+    xm = x - mu
+    xm = np.linalg.solve(C, xm)  # Cholesky solve
+
+    # Compute initial terms
+    rho = np.sum((xm - gam) ** 2, axis=0)
+    pdf_ln = gammaln(vn2) - (d / 2) * np.log(np.pi * v) - gammaln(v / 2) \
+             - np.sum(np.log(np.diag(C))) - 0.5 * vn2 * np.log(1 + rho / v)
+
+    # Return if gam is zero
+    if np.all(gam == 0):
+        return pdf_ln
+
+    # Initialize variables
+    idx = (pdf_ln > -37)
+    maxiter = 10000
+    k = 0
+    logsumk = np.zeros_like(pdf_ln)
+
+    # Iterate for approximation
+    while np.any(idx) and k < maxiter:
+        # Compute terms
+        gcg = np.sum((np.linalg.solve(C, gam)) ** 2)
+        term = 0.5 * np.log(2) + np.log(v + k) - 0.5 * np.log(v + rho) - 0.5 * gcg
+        logterms = gammaln((v + d + k) / 2) - gammaln((k + 1) / 2) - gammaln(vn2) + k * term
+        ff = np.exp(logterms[idx])
+        
+        # Update sum
+        logsumk[idx] = np.logaddexp(logsumk[idx], np.log(ff))
+        
+        # Check convergence
+        if np.all(np.abs(ff) < 1e-4):
+            break
+
+        k += 1
+
+    # Add the final sum to the PDF log values
+    pdf_ln += logsumk
+
+    return pdf_ln
+
+# Truncated logarithm function
+def slog(x):
+    """
+    Truncated logarithm to avoid numerical issues with -inf or +inf.
+    """
+    realmin = np.finfo(np.float64).tiny
+    realmax = np.finfo(np.float64).max
+    return np.log(np.clip(x, realmin, realmax))
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Use the mvnctpdf_ln function defined earlier
+# Ensure you copy the previously provided mvnctpdf_ln function into your script.
+
+def plot_mvnct_density(mu, gam, v, Sigma, title):
+    # Define grid for x1 and x2
+    x1 = np.linspace(-10, 10, 100)
+    x2 = np.linspace(-10, 10, 100)
+    X1, X2 = np.meshgrid(x1, x2)
+    grid = np.array([X1.ravel(), X2.ravel()])
+    
+    # Compute the log density at each grid point
+    log_density = mvnctpdf_ln(grid, mu, gam, v, Sigma)
+    density = np.exp(log_density).reshape(X1.shape)  # Convert log density to density
+    
+    # Plot contour
+    plt.figure(figsize=(6, 6))
+    plt.contour(X1, X2, density, levels=15, cmap="viridis")
+    plt.title(title)
+    plt.xlabel(r"$X_1$")
+    plt.ylabel(r"$X_2$")
+    plt.colorbar(label="Density")
+    plt.grid(True)
+    plt.show()
+
+# Parameters for each plot
+v = 4
+Sigma_identity = np.eye(2)
+
+# First plot: mu = [0, 0], gam = [0, 0], Sigma = I2
+mu1 = np.zeros(2)
+gam1 = np.zeros(2)
+plot_mvnct_density(mu1, gam1, v, Sigma_identity, "MVNCT: v=4, γ=[0, 0], Σ=I2")
+
+# Second plot: mu = [0, 1], gam = [0, 1], Sigma = I2
+mu2 = np.array([0, 1])
+gam2 = np.array([0, 1])
+plot_mvnct_density(mu2, gam2, v, Sigma_identity, "MVNCT: v=4, γ=[0, 1], Σ=I2")
+
+# Third plot: mu = [0, 1], gam = [0, 1], R = 0.5
+R = np.array([[1, 0.5], [0.5, 1]])  # Correlation matrix
+plot_mvnct_density(mu2, gam2, v, R, "MVNCT: v=4, γ=[0, 1], R=0.5")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
