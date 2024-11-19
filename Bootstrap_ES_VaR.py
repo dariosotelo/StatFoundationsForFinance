@@ -620,7 +620,7 @@ def parametric_bootstrap_GAt(data, ESlevel=0.01, B=500, n=10000):
 
 
 # Generate bootstrap samples
-nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(samples, 0.01, 100, 7500)
+nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(samples, 0.01, 100, 6667)
 bootstrap_samples_t, var_t = parametric_bootstrap_t(samples, 0.01, 100, 10000)
 bootstrap_samples_nonc, var_nonc = parametric_bootstrap_nonc(samples, 0.01, 100, 10000)
 bootstrap_samples_gaussian, var_gaussian = parametric_bootstrap_gaussian(samples, 0.01, 100, 10000)
@@ -664,7 +664,7 @@ def VaRt(df, alpha=0.01):
     return stats.t.ppf(alpha, df)
 
 # Generate bootstrap samples
-nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(samples_t, 0.01, 100, 7500)
+nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(samples_t, 0.01, 100, 6667)
 bootstrap_samples_t, var_t = parametric_bootstrap_t(samples_t, 0.01, 100, 10000)
 bootstrap_samples_nonc, var_nonc = parametric_bootstrap_nonc(samples_t, 0.01, 100, 10000)
 bootstrap_samples_gaussian, var_gaussian = parametric_bootstrap_gaussian(samples_t, 0.01, 100, 10000)
@@ -722,7 +722,7 @@ def stabgen(nobs, a, b=0, c=1, d=0, seed=None):
     return x
 
 stable_sample = stabgen(10000, 1.7, -0.3)
-nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(stable_sample, 0.01, 100, 7500)
+nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(stable_sample, 0.01, 100, 6667)
 bootstrap_samples_t, var_t = parametric_bootstrap_t(stable_sample, 0.01, 100, 10000)
 bootstrap_samples_nonc, var_nonc = parametric_bootstrap_nonc(stable_sample, 0.01, 100, 10000)
 bootstrap_samples_gaussian, var_gaussian = parametric_bootstrap_gaussian(stable_sample, 0.01, 100, 10000)
@@ -814,17 +814,42 @@ def generate_asymstab_samples(n, alpha, beta=0, mu=0, scale=1):
         samples[i] = brentq(lambda x: levy_stable.cdf(x, alpha, beta) - u[i], -1e6, 1e6)
     return mu + scale * samples
 
+def mle_asymmetric_stable(data):
+    def neg_log_likelihood(params):
+        alpha, beta, loc, scale = params
+        if not (0 < alpha <= 2 and -1 <= beta <= 1 and scale > 0):
+            return np.inf
+        return -np.sum(levy_stable.logpdf(data, alpha, beta, loc=loc, scale=scale))
+
+    initial_params = [1.7, -0.3, np.mean(data), np.std(data)]
+    bounds = [(0.01, 2), (-1, 1), (None, None), (1e-6, None)]
+    result = minimize(neg_log_likelihood, initial_params, bounds=bounds, method='L-BFGS-B')
+    return result.x
+
+def parametric_bootstrap_asymstab(data, ESlevel=0.01, B=100, n=2500):
+    alpha_mle, beta_mle, loc_mle, scale_mle = mle_asymmetric_stable(data)
+    ES_samples = []
+    VaR_samples = []
+    for k in tqdm(range(B)):
+        bootstrap_sample = generate_asymstab_samples(n, alpha_mle, beta_mle, loc_mle, scale_mle)
+        ES = expected_shortfall(bootstrap_sample, ESlevel)
+        VaR = np.percentile(bootstrap_sample, ESlevel * 100)
+        ES_samples.append(ES)
+        VaR_samples.append(VaR)
+    return ES_samples, VaR_samples
+
 asymstab_samples = generate_asymstab_samples(10000, 1.7, -0.3)
 True_ES, True_VaR = asymstableES(0.01, 1.7, -0.3)
 
-nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(asymstab_samples, 0.01, 100, 7500)
+nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(asymstab_samples, 0.01, 100, 6667)
 bootstrap_samples_t, var_t = parametric_bootstrap_t(asymstab_samples, 0.01, 100, 10000)
 bootstrap_samples_nonc, var_nonc = parametric_bootstrap_nonc(asymstab_samples, 0.01, 100, 10000)
 bootstrap_samples_gaussian, var_gaussian = parametric_bootstrap_gaussian(asymstab_samples, 0.01, 100, 10000)
 bootstrap_samples_mixed, var_mixed = parametric_bootstrap_mixed(asymstab_samples, 0.01, 100, 10000)
 parametric_bootstrap_GAt_samples, var_GAt = parametric_bootstrap_GAt(asymstab_samples, 0.01, 100, 10000)
+boostrap_sample_asymstab, var_asymstab = parametric_bootstrap_asymstab(asymstab_samples, 0.01, 100, 10000)
 
-data = {'Expected Shortfall': (nonparametric_bootstrap_samples + bootstrap_samples_t + bootstrap_samples_nonc + bootstrap_samples_gaussian + bootstrap_samples_mixed + parametric_bootstrap_GAt_samples), 'Type': (['Nonparametric'] * len(nonparametric_bootstrap_samples) + ['Student t'] * len(bootstrap_samples_t) + ['Noncentral t'] * len(bootstrap_samples_nonc) + ['Gaussian'] * len(bootstrap_samples_gaussian) + ['2-Comp Normal'] * len(bootstrap_samples_mixed) + ['GAt'] * len(parametric_bootstrap_GAt_samples))}
+data = {'Expected Shortfall': (nonparametric_bootstrap_samples + bootstrap_samples_t + bootstrap_samples_nonc + bootstrap_samples_gaussian + bootstrap_samples_mixed + parametric_bootstrap_GAt_samples + boostrap_sample_asymstab), 'Type': (['Nonparametric'] * len(nonparametric_bootstrap_samples) + ['Student t'] * len(bootstrap_samples_t) + ['Noncentral t'] * len(bootstrap_samples_nonc) + ['Gaussian'] * len(bootstrap_samples_gaussian) + ['2-Comp Normal'] * len(bootstrap_samples_mixed) + ['GAt'] * len(parametric_bootstrap_GAt_samples) + ['Asymmetric Stable'] * len(boostrap_sample_asymstab))}
 df = pd.DataFrame(data)
 
 plt.figure(figsize=(10, 6))
@@ -837,7 +862,7 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
-data_var = {'VaR': (var_nonpara + var_t + var_nonc + var_gaussian + var_mixed + var_GAt), 'Type': (['Nonparametric'] * len(var_nonpara) + ['Student t'] * len(var_t) + ['Noncentral t'] * len(var_nonc) + ['Gaussian'] * len(var_gaussian) + ['2-Comp Normal'] * len(var_mixed) + ['GAt'] * len(var_GAt))}
+data_var = {'VaR': (var_nonpara + var_t + var_nonc + var_gaussian + var_mixed + var_GAt + var_asymstab), 'Type': (['Nonparametric'] * len(var_nonpara) + ['Student t'] * len(var_t) + ['Noncentral t'] * len(var_nonc) + ['Gaussian'] * len(var_gaussian) + ['2-Comp Normal'] * len(var_mixed) + ['GAt'] * len(var_GAt) + ['Asymmetric Stable'] * len(var_asymstab))}
 df_var = pd.DataFrame(data_var)
 
 plt.figure(figsize=(10, 6))
