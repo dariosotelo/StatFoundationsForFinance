@@ -858,6 +858,7 @@ plt.show()
 import numpy as np
 from scipy.linalg import cho_solve, cho_factor
 from scipy.special import gammaln
+import matplotlib.pyplot as plt
 
 def mvnctpdf_ln(x, mu, gam, v, Sigma):
     """
@@ -945,11 +946,12 @@ def slog(x):
 
 
 
+#%% Test for the plots
+
 import numpy as np
 import matplotlib.pyplot as plt
-
-# Use the mvnctpdf_ln function defined earlier
-# Ensure you copy the previously provided mvnctpdf_ln function into your script.
+import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
 
 def plot_mvnct_density(mu, gam, v, Sigma, title):
     # Define grid for x1 and x2
@@ -957,11 +959,22 @@ def plot_mvnct_density(mu, gam, v, Sigma, title):
     x2 = np.linspace(-10, 10, 100)
     X1, X2 = np.meshgrid(x1, x2)
     grid = np.array([X1.ravel(), X2.ravel()])
-    
+
+    # Reshape inputs to column vectors
+    mu = np.reshape(mu, (-1, 1))
+    gam = np.reshape(gam, (-1, 1))
+
+    # Debugging: Print dimensions of inputs
+    print(f"mu shape: {mu.shape}, gam shape: {gam.shape}, Sigma shape: {Sigma.shape}")
+
+    # Ensure Sigma is positive definite
+    if not np.all(np.linalg.eigvals(Sigma) > 0):
+        raise ValueError("Sigma must be positive definite.")
+
     # Compute the log density at each grid point
     log_density = mvnctpdf_ln(grid, mu, gam, v, Sigma)
     density = np.exp(log_density).reshape(X1.shape)  # Convert log density to density
-    
+
     # Plot contour
     plt.figure(figsize=(6, 6))
     plt.contour(X1, X2, density, levels=15, cmap="viridis")
@@ -989,6 +1002,150 @@ plot_mvnct_density(mu2, gam2, v, Sigma_identity, "MVNCT: v=4, γ=[0, 1], Σ=I2")
 # Third plot: mu = [0, 1], gam = [0, 1], R = 0.5
 R = np.array([[1, 0.5], [0.5, 1]])  # Correlation matrix
 plot_mvnct_density(mu2, gam2, v, R, "MVNCT: v=4, γ=[0, 1], R=0.5")
+
+
+def mvnctpdf_ln(x, mu, gam, v, Sigma):
+    d, T = x.shape
+    C = np.linalg.cholesky(Sigma)
+
+    mu = mu.reshape(-1, 1) if mu.ndim == 1 else mu
+    gam = gam.reshape(-1, 1) if gam.ndim == 1 else gam
+    vn2 = (v + d) / 2
+
+    xm = x - mu
+    xm = np.linalg.solve(C, xm)
+    rho = np.sum((xm - gam) ** 2, axis=0)
+    pdf_ln = gammaln(vn2) - (d / 2) * np.log(np.pi * v) - gammaln(v / 2) \
+             - np.sum(np.log(np.diag(C))) - 0.5 * vn2 * np.log(1 + rho / v)
+
+    if np.all(gam == 0):
+        return pdf_ln
+
+    idx = (pdf_ln > -37)
+    maxiter = 1000
+    k = 0
+    logsumk = np.zeros_like(pdf_ln)
+
+    while np.any(idx) and k < maxiter:
+        gcg = np.sum((np.linalg.solve(C, gam)) ** 2)
+        term = 0.5 * np.log(2) + np.log(v + k) - 0.5 * np.log(v + rho) - 0.5 * gcg
+        logterms = gammaln((v + d + k) / 2) - gammaln((k + 1) / 2) - gammaln(vn2) + k * term
+        logterms = np.clip(logterms, -700, 700)  # Avoid numerical overflow
+        ff = np.exp(logterms[idx])
+        if np.all(np.abs(ff) < 1e-4):
+            break
+
+        logsumk[idx] = np.logaddexp(logsumk[idx], np.log(ff))
+        k += 1
+
+    pdf_ln += logsumk
+    print("Eigenvalues of Sigma:", np.linalg.eigvals(Sigma))
+
+    print(f"Iteration {k}, max logterms: {np.max(logterms)}, min logterms: {np.min(logterms)}")
+    return pdf_ln
+
+x1 = np.linspace(-5, 5, 100)
+x2 = np.linspace(-5, 5, 100)
+
+
+
+# First plot: mu = [0, 0], gam = [0, 0], Sigma = I2
+mu1 = np.zeros(2)
+gam1 = np.zeros(2)
+plot_mvnct_density(mu1, gam1, v, Sigma_identity, "MVNCT: v=4, γ=[0, 0], Σ=I2")
+
+# Second plot: mu = [0, 1], gam = [0, 1], Sigma = I2
+mu2 = np.array([0, 1])
+gam2 = np.array([0, 1])
+plot_mvnct_density(mu2, gam2, v, Sigma_identity, "MVNCT: v=4, γ=[0, 1], Σ=I2")
+
+# Third plot: mu = [0, 1], gam = [0, 1], R = 0.5
+R = np.array([[1, 0.5], [0.5, 1]])  # Correlation matrix
+plot_mvnct_density(mu2, gam2, v, R, "MVNCT: v=4, γ=[0, 1], R=0.5")
+
+
+
+#%% II.1
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def bivariate_laplace(mu, b, n):
+    """
+    Generate n samples from a bivariate Laplace distribution.
+    Parameters:
+        mu: [mu_x1, mu_x2] (location parameters)
+        b: [b_x1, b_x2] (scale parameters)
+        n: Number of samples
+    Returns:
+        samples: n x 2 array of samples
+    """
+    x1 = np.random.laplace(loc=mu[0], scale=b[0], size=n)
+    x2 = np.random.laplace(loc=mu[1], scale=b[1], size=n)
+    return np.column_stack((x1, x2))
+
+def simulate_mixture(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n):
+    """
+    Simulate samples from a 2-component bivariate Laplace mixture.
+    Parameters:
+        pi: Mixing weight for the first component
+        mu1: Location parameters for the first component
+        b1: Scale parameters for the first component
+        Sigma1: Covariance matrix for the first component
+        mu2: Location parameters for the second component
+        b2: Scale parameters for the second component
+        Sigma2: Covariance matrix for the second component
+        n: Number of samples
+    Returns:
+        samples: Simulated samples
+    """
+    # Generate samples for each component
+    n1 = int(pi * n)
+    n2 = n - n1
+    
+    # First component
+    samples1 = bivariate_laplace(mu1, b1, n1)
+    samples1 = samples1 @ np.linalg.cholesky(Sigma1).T  # Apply covariance
+    
+    # Second component
+    samples2 = bivariate_laplace(mu2, b2, n2)
+    samples2 = samples2 @ np.linalg.cholesky(Sigma2).T  # Apply covariance
+
+    # Combine the samples
+    return np.vstack((samples1, samples2))
+
+
+# Parameters
+pi = 0.7  # Mixing weight for the first component
+mu1 = [0, 0]  # Location parameters for the first component
+b1 = [10, 10]  # Scale parameters for the first component
+Sigma1 = np.array([[1, 0.5], [0.5, 1]])  # Covariance matrix for the first component
+
+mu2 = [0, 0]  # Location parameters for the second component
+b2 = [5, 5]  # Scale parameters for the second component
+Sigma2 = np.array([[4, 2], [2, 4]])  # Covariance matrix for the second component (more extreme returns)
+
+n = 1000  # Number of samples
+
+# Simulate the mixture
+samples = simulate_mixture(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n)
+
+# Create a 3D scatter plot
+fig = plt.figure(figsize=(10, 7))
+ax = fig.add_subplot(111, projection='3d')
+
+# Plot the samples
+ax.scatter(samples[:, 0], samples[:, 1], np.random.uniform(0, 1, size=len(samples)), c='blue', alpha=0.6)
+ax.set_title("3D Plot of 2-Component Bivariate Mixture of Laplace")
+ax.set_xlabel("X1")
+ax.set_ylabel("X2")
+ax.set_zlabel("Density")
+plt.show()
+
+#%% II.2
+
+
+
 
 
 
