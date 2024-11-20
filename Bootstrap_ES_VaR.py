@@ -810,7 +810,7 @@ def asymstabpdf(x, a, b):
 def generate_asymstab_samples(n, alpha, beta=0, mu=0, scale=1):
     u = np.random.uniform(0, 1, n)
     samples = np.zeros(n)
-    for i in tqdm(range(n)):
+    for i in (range(n)):
         samples[i] = brentq(lambda x: levy_stable.cdf(x, alpha, beta) - u[i], -1e6, 1e6)
     return mu + scale * samples
 
