@@ -1409,6 +1409,7 @@ print(f"b2 difference: {np.abs(np.array(b2_true) - estimated_params[7:9])}")
 # It is not a good estimation, something must be checked, maybe our x_0 should be closer to the real values?
 
 
+#%% II.3
 
 
 
