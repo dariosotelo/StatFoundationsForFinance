@@ -912,7 +912,7 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
     try:
         C, lower = cho_factor(Sigma, lower=True, check_finite=True)
     except np.linalg.LinAlgError:
-        raise ValueError("Sigma must be positive definite.")
+        raise ValueError("Sigma must be (semi) positive definite.")
     
     # Reshape inputs
     mu = mu.reshape(-1, 1) if mu.ndim == 1 else mu
@@ -1407,7 +1407,7 @@ print(f"b2 difference: {np.abs(np.array(b2_true) - estimated_params[7:9])}")
 
 
 # It is not a good estimation, something must be checked, maybe our x_0 should be closer to the real values?
-
+# this is not finished.
 
 #%% II.3
 
