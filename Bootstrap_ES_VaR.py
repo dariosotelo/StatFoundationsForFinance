@@ -977,6 +977,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
+from scipy.integrate import quad
+import scipy.special as sp
 
 def plot_mvnct_density(mu, gam, v, Sigma, title):
     # Define grid for x1 and x2
@@ -1169,8 +1171,43 @@ plt.show()
 
 #%% II.2
 
+# a)
+
+#Our definition
+def bessel_k_int(nu, x):
+    integrand = lambda u: 0.5*u**(nu-1)*np.exp(-x/2*(1/u+u))
+    result, _ = quad(integrand, 0, np.inf)
+    return result
+
+# sp.kv
+
+# Test
+nu = 1.5
+x = 2.0
+sp_result = sp.kv(nu, x)
+our_result = bessel_k_int(nu, x)
+
+def graph_difference(nu, x, x_values):
+    # Compute absolute differences
+    y_values = [abs(bessel_k_int(nu, x_val) - sp.kv(nu, x_val)) for x_val in x_values]
+
+    # Plot the differences
+    plt.figure(figsize=(10, 6))
+    plt.plot(x_values, y_values, marker='o', linestyle='-', color='blue', label='Difference')
+    plt.title('Difference between bessel_k_int and scipy bessel_k')
+    plt.xlabel('x values')
+    plt.ylabel('Absolute Difference')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 
+x_values = list(range(-100, 20))
+    
+graph_difference(1.2, 2.0, x_values)
+    
+
+# In this part idk if he wants us to report a table w the differences
 
 
 
