@@ -979,6 +979,7 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.integrate import quad
 import scipy.special as sp
+from scipy.optimize import minimize
 
 def plot_mvnct_density(mu, gam, v, Sigma, title):
     # Define grid for x1 and x2
@@ -1206,15 +1207,206 @@ x_values = list(range(-100, 20))
 graph_difference(1.2, 2.0, x_values)
     
 
-# In this part idk if he wants us to report a table w the differences
+# In this part idk if he wants us to report a table w the differences (part a)
 
 
+# b) 
 
 
+# I think we should check this definition of the function
+def bivariate_discrete_laplace_logpdf(mean, scale, x):
+    """
+    Log-probability density of the bivariate discrete Laplace distribution.
+    Args:
+        mean (tuple): (mu1, mu2), mean of the bivariate Laplace.
+        scale (tuple): (b1, b2), scale parameters.
+        x (array-like): Observed data points (n x 2 array).
+    Returns:
+        Log-probability density for each point in x.
+    """
+    mu1, mu2 = mean
+    b1, b2 = scale
+    x1, x2 = x[:, 0], x[:, 1]
+    return -np.abs(x1 - mu1) / b1 - np.abs(x2 - mu2) / b2 - np.log(2 * b1 * b2)
+
+# Negative log-likelihood for the k=2 mixture model
+def negative_log_likelihood(params, x):
+    """
+    Negative log-likelihood for the k=2 component, d=2 discrete mixture of Laplace.
+    Args:
+        params: [w1, mu1_1, mu1_2, b1_1, b1_2, mu2_1, mu2_2, b2_1, b2_2]
+                where w1 is the weight of the first component, and the rest are
+                the parameters of the two components (means and scales).
+        x: Observed bivariate data points (n x 2 array).
+    Returns:
+        Negative log-likelihood of the mixture model.
+    """
+    w1 = params[0]
+    mu1 = (params[1], params[2])
+    b1 = (params[3], params[4])
+    mu2 = (params[5], params[6])
+    b2 = (params[7], params[8])
+    w2 = 1 - w1  # Enforce weight constraint
+
+    # Compute log-probabilities for each component
+    logpdf1 = bivariate_discrete_laplace_logpdf(mu1, b1, x)
+    logpdf2 = bivariate_discrete_laplace_logpdf(mu2, b2, x)
+
+    # Mixture log-likelihood
+    log_likelihood = np.log(w1 * np.exp(logpdf1) + w2 * np.exp(logpdf2))
+    return -np.sum(log_likelihood)  # Negative log-likelihood
+
+# Generate synthetic data (mixture of two bivariate discrete Laplace distributions)
+np.random.seed(42)
+n_samples = 200
+data1 = np.random.randint(-5, 5, size=(n_samples // 2, 2))
+data2 = np.random.randint(5, 15, size=(n_samples // 2, 2))
+data = np.vstack([data1, data2])
+
+# Initial guesses for parameters
+initial_guess = [
+    0.5,  # w1 (weight of the first component)
+    0, 0,  # mu1 (mean of the first component)
+    1, 1,  # b1 (scale of the first component)
+    10, 10,  # mu2 (mean of the second component)
+    1, 1  # b2 (scale of the second component)
+]
+
+# Set parameter bounds (to mimic MATLAB constraints)
+bounds = [
+    (0.01, 0.99),  # w1 (weights must sum to 1)
+    (-10, 10),     # mu1_1
+    (-10, 10),     # mu1_2
+    (0.1, 10),     # b1_1
+    (0.1, 10),     # b1_2
+    (-10, 20),     # mu2_1
+    (-10, 20),     # mu2_2
+    (0.1, 10),     # b2_1
+    (0.1, 10)      # b2_2
+]
+
+# Perform optimization using BFGS
+result = minimize(
+    fun=negative_log_likelihood,
+    x0=initial_guess,
+    args=(data,),
+    method='L-BFGS-B',
+    bounds=bounds,
+    options={'disp': True}
+)
+
+# Extract results
+estimated_params = result.x
+print("Estimated parameters:", estimated_params)
+
+# Optional: Extract standard errors using the Hessian inverse
+hessian_inv = result.hess_inv.todense() if hasattr(result.hess_inv, "todense") else result.hess_inv
+standard_errors = np.sqrt(np.diag(hessian_inv)) if hessian_inv is not None else None
+print("Standard errors:", standard_errors)
 
 
+# This part is to test if the function is approximating correctly the distribution
+def generate_bivariate_discrete_laplace(n, w1, mu1, b1, mu2, b2):
+    """
+    Generate synthetic data from a k=2 bivariate discrete mixture of Laplace.
+    Args:
+        n: Number of samples.
+        w1: Weight of the first component.
+        mu1: Mean vector of the first component.
+        b1: Scale parameters of the first component.
+        mu2: Mean vector of the second component.
+        b2: Scale parameters of the second component.
+    Returns:
+        Synthetic bivariate data (n x 2 array).
+    """
+    data = np.zeros((n, 2))
+    for i in range(n):
+        # Randomly choose component based on weights
+        if np.random.rand() < w1:
+            # Component 1
+            data[i, 0] = np.random.laplace(mu1[0], b1[0])
+            data[i, 1] = np.random.laplace(mu1[1], b1[1])
+        else:
+            # Component 2
+            data[i, 0] = np.random.laplace(mu2[0], b2[0])
+            data[i, 1] = np.random.laplace(mu2[1], b2[1])
+    return data
+
+# True parameters
+w1_true = 0.6
+mu1_true = [1, 2]
+b1_true = [1, 1.5]
+mu2_true = [5, 6]
+b2_true = [1.2, 0.8]
+
+# Generate synthetic data
+n_samples = 1000
+data = generate_bivariate_discrete_laplace(
+    n=n_samples, w1=w1_true, mu1=mu1_true, b1=b1_true, mu2=mu2_true, b2=b2_true
+)
+
+# Initial guesses for parameters
+initial_guess = [
+    0.5,  # w1
+    0, 0,  # mu1
+    1, 1,  # b1
+    10, 10,  # mu2
+    1, 1  # b2
+]
+
+# Set bounds
+bounds = [
+    (0.01, 0.99),  # w1
+    (-10, 10),     # mu1_1
+    (-10, 10),     # mu1_2
+    (0.1, 10),     # b1_1
+    (0.1, 10),     # b1_2
+    (-10, 20),     # mu2_1
+    (-10, 20),     # mu2_2
+    (0.1, 10),     # b2_1
+    (0.1, 10)      # b2_2
+]
 
 
+# This is the important optimization part
+# Perform optimization using the earlier code
+
+result = minimize(
+    fun=negative_log_likelihood,
+    x0=initial_guess,
+    args=(data,),
+    method='L-BFGS-B',
+    bounds=bounds,
+    options={'disp': True}
+)
+
+# Extract results
+estimated_params = result.x
+print("\nEstimated Parameters:")
+print(f"w1: {estimated_params[0]}")
+print(f"mu1: {estimated_params[1:3]}")
+print(f"b1: {estimated_params[3:5]}")
+print(f"mu2: {estimated_params[5:7]}")
+print(f"b2: {estimated_params[7:9]}")
+
+# Compare with true parameters
+print("\nTrue Parameters vs Estimated Parameters:")
+print(f"True w1: {w1_true}, Estimated w1: {estimated_params[0]}")
+print(f"True mu1: {mu1_true}, Estimated mu1: {estimated_params[1:3]}")
+print(f"True b1: {b1_true}, Estimated b1: {estimated_params[3:5]}")
+print(f"True mu2: {mu2_true}, Estimated mu2: {estimated_params[5:7]}")
+print(f"True b2: {b2_true}, Estimated b2: {estimated_params[7:9]}")
+
+# Calculate differences
+print("\nDifferences:")
+print(f"w1 difference: {abs(w1_true - estimated_params[0])}")
+print(f"mu1 difference: {np.abs(np.array(mu1_true) - estimated_params[1:3])}")
+print(f"b1 difference: {np.abs(np.array(b1_true) - estimated_params[3:5])}")
+print(f"mu2 difference: {np.abs(np.array(mu2_true) - estimated_params[5:7])}")
+print(f"b2 difference: {np.abs(np.array(b2_true) - estimated_params[7:9])}")
+
+
+# It is not a good estimation, something must be checked, maybe our x_0 should be closer to the real values?
 
 
 
