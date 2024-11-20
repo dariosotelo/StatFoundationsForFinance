@@ -1188,10 +1188,8 @@ sp_result = sp.kv(nu, x)
 our_result = bessel_k_int(nu, x)
 
 def graph_difference(nu, x, x_values):
-    # Compute absolute differences
     y_values = [abs(bessel_k_int(nu, x_val) - sp.kv(nu, x_val)) for x_val in x_values]
 
-    # Plot the differences
     plt.figure(figsize=(10, 6))
     plt.plot(x_values, y_values, marker='o', linestyle='-', color='blue', label='Difference')
     plt.title('Difference between bessel_k_int and scipy bessel_k')
@@ -1202,6 +1200,7 @@ def graph_difference(nu, x, x_values):
     plt.show()
 
 
+# You can change the range, after 20 the difference is minimal
 x_values = list(range(-100, 20))
     
 graph_difference(1.2, 2.0, x_values)
