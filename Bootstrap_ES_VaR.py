@@ -277,7 +277,7 @@
 # simulated_data = GAtsim(sim, d, v, theta)
 
 
-# %%
+# %% Part 1
 from scipy.stats import norm, t, gaussian_kde, levy_stable
 from scipy.special import beta, betainc, kv, gamma
 from scipy.optimize import root_scalar, minimize, brentq
@@ -825,7 +825,7 @@ def mle_asymmetric_stable(data):
     result = minimize(neg_log_likelihood, initial_params, bounds=bounds, method='L-BFGS-B')
     return result.x
 
-def parametric_bootstrap_asymstab(data, ESlevel=0.01, B=100, n=2500):
+def parametric_bootstrap_asymstab(data, ESlevel=0.01, B=100, n=10000):
     alpha_mle, beta_mle, loc_mle, scale_mle = mle_asymmetric_stable(data)
     ES_samples = []
     VaR_samples = []
@@ -839,6 +839,8 @@ def parametric_bootstrap_asymstab(data, ESlevel=0.01, B=100, n=2500):
 
 asymstab_samples = generate_asymstab_samples(10000, 1.7, -0.3)
 True_ES, True_VaR = asymstableES(0.01, 1.7, -0.3)
+
+print(mle_asymmetric_stable(asymstab_samples))
 
 nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(asymstab_samples, 0.01, 100, 6667)
 bootstrap_samples_t, var_t = parametric_bootstrap_t(asymstab_samples, 0.01, 100, 10000)
@@ -877,7 +879,7 @@ plt.show()
 
 
 
-#%% Part 2
+#%% Part 2 Prep
 
 import numpy as np
 from scipy.linalg import cho_solve, cho_factor
