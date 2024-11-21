@@ -47,7 +47,6 @@
 
 # #%% I.1
 
-
 # # Paolella's code suggestion (it is a kinda revised copy-paste from ChatGPT)
 
 # def GAtsim(sim, d, v, theta):
