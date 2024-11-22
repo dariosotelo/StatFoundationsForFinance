@@ -886,6 +886,7 @@ from scipy.linalg import cho_solve, cho_factor
 from scipy.special import gammaln
 import matplotlib.pyplot as plt
 
+"""
 def mvnctpdf_ln(x, mu, gam, v, Sigma):
     """
     Direct density approximation (d.d.a.) for the log of the d-variate canonical MVNCT density.
@@ -971,7 +972,7 @@ def slog(x):
     return np.log(np.clip(x, realmin, realmax))
 
 
-
+"""
 #%% Test for the plots
 
 import numpy as np
@@ -982,6 +983,7 @@ from scipy.integrate import quad
 import scipy.special as sp
 from scipy.optimize import minimize
 
+# Extra
 def plot_mvnct_density(mu, gam, v, Sigma, title):
     # Define grid for x1 and x2
     x1 = np.linspace(-10, 10, 100)
@@ -1014,25 +1016,8 @@ def plot_mvnct_density(mu, gam, v, Sigma, title):
     plt.grid(True)
     plt.show()
 
-# Parameters for each plot
-v = 4
-Sigma_identity = np.eye(2)
 
-# First plot: mu = [0, 0], gam = [0, 0], Sigma = I2
-mu1 = np.zeros(2)
-gam1 = np.zeros(2)
-plot_mvnct_density(mu1, gam1, v, Sigma_identity, "MVNCT: v=4, γ=[0, 0], Σ=I2")
-
-# Second plot: mu = [0, 1], gam = [0, 1], Sigma = I2
-mu2 = np.array([0, 1])
-gam2 = np.array([0, 1])
-plot_mvnct_density(mu2, gam2, v, Sigma_identity, "MVNCT: v=4, γ=[0, 1], Σ=I2")
-
-# Third plot: mu = [0, 1], gam = [0, 1], R = 0.5
-R = np.array([[1, 0.5], [0.5, 1]])  # Correlation matrix
-plot_mvnct_density(mu2, gam2, v, R, "MVNCT: v=4, γ=[0, 1], R=0.5")
-
-
+# Prep. 3
 def mvnctpdf_ln(x, mu, gam, v, Sigma):
     d, T = x.shape
     C = np.linalg.cholesky(Sigma)
@@ -1076,7 +1061,9 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
 x1 = np.linspace(-5, 5, 100)
 x2 = np.linspace(-5, 5, 100)
 
-
+# Parameters for each plot
+v = 4
+Sigma_identity = np.eye(2)
 
 # First plot: mu = [0, 0], gam = [0, 0], Sigma = I2
 mu1 = np.zeros(2)
@@ -1411,6 +1398,8 @@ print(f"b2 difference: {np.abs(np.array(b2_true) - estimated_params[7:9])}")
 # this is not finished.
 
 #%% II.3
+
+
 
 
 
