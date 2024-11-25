@@ -968,7 +968,7 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
 # Truncated logarithm function
 def slog(x):
     """
-    Truncated logarithm to avoid numerical issues with -inf or +inf.
+    #Truncated logarithm to avoid numerical issues with -inf or +inf.
     """
     realmin = np.finfo(np.float64).tiny
     realmax = np.finfo(np.float64).max
@@ -1022,6 +1022,7 @@ def plot_mvnct_density(mu, gam, v, Sigma, title):
     plt.show()
 
 
+# This is the part i told you about
 # Prep. 3
 """
 def mvnctpdf_ln(x, mu, gam, v, Sigma):
@@ -1065,7 +1066,7 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
     return pdf_ln
 """
 
-def mnvtcpdfln(x, mu, gam, v, Sigma):
+def mvnctpdf_ln(x, mu, gam, v, Sigma):
     d, t = x.shape
     C = Sigma
     R = cholesky(C, lower=True)
@@ -1106,6 +1107,7 @@ def mnvtcpdfln(x, mu, gam, v, Sigma):
                     + k * term)
         
         ff = np.real(np.exp(logterms))
+        #ff=np.squeeze(ff)
         logsumk = np.log(ff)
         
         while k < maxiter:
