@@ -888,6 +888,8 @@ import matplotlib.pyplot as plt
 
 """
 def mvnctpdf_ln(x, mu, gam, v, Sigma):
+    
+    """
     """
     Direct density approximation (d.d.a.) for the log of the d-variate canonical MVNCT density.
 
@@ -906,6 +908,7 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
     Returns:
     pdf_ln : ndarray
         Logarithm of the probability density function at the evaluation points.
+    """
     """
     # Dimensions
     d, T = x.shape
@@ -982,6 +985,8 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.integrate import quad
 import scipy.special as sp
 from scipy.optimize import minimize
+from scipy.special import gammaln
+from scipy.linalg import cholesky
 
 # Extra
 def plot_mvnct_density(mu, gam, v, Sigma, title):
@@ -1018,6 +1023,7 @@ def plot_mvnct_density(mu, gam, v, Sigma, title):
 
 
 # Prep. 3
+"""
 def mvnctpdf_ln(x, mu, gam, v, Sigma):
     d, T = x.shape
     C = np.linalg.cholesky(Sigma)
@@ -1057,6 +1063,76 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
 
     print(f"Iteration {k}, max logterms: {np.max(logterms)}, min logterms: {np.min(logterms)}")
     return pdf_ln
+"""
+
+def mnvtcpdfln(x, mu, gam, v, Sigma):
+    d, t = x.shape
+    C = Sigma
+    R = cholesky(C, lower=True)
+    assert np.all(np.diag(R) > 0), "C is not (semi) positive definite"
+
+    mu = np.reshape(mu, (-1, 1))
+    gam = np.reshape(gam, (-1, 1))
+    vn2 = (v + d) / 2
+    xm = x - mu
+    rho = np.sum((np.linalg.solve(R.T, xm))**2, axis=0)
+    
+    pdfln = (gammaln(vn2) 
+             - (d / 2) * np.log(np.pi * v) 
+             - np.sum(np.log(np.diag(R))) 
+             - vn2 * np.log1p(rho / v))
+    
+    if np.all(gam == 0):
+        return pdfln
+
+    idx = pdfln >= -37
+    maxiter = int(1e4)
+    k = 0
+
+    if np.any(idx):
+        gcg = np.sum(np.square(np.linalg.solve(R.T, gam))) #Transpose R
+        pdfln -= 0.5 * gcg
+        xcg = np.dot(xm.T, np.linalg.solve(C, gam))
+        term = (0.5 * np.log(2) 
+                + np.log(xcg) 
+                - 0.5 * slog(v + rho.T))
+        
+        term[term == -np.inf] = np.log(np.finfo(float).tiny)
+        term[term == np.inf] = np.log(np.finfo(float).max)
+        
+        logterms = (gammaln((v + d + k) / 2) 
+                    - gammaln(vn2) 
+                    - gammaln(k + 1) 
+                    + k * term)
+        
+        ff = np.real(np.exp(logterms))
+        logsumk = np.log(ff)
+        
+        while k < maxiter:
+            k += 1
+            logterms = (gammaln((v + d + k) / 2) 
+                        - gammaln(vn2) 
+                        - gammaln(k + 1) 
+                        + k * term[idx]) #Check on this condition
+            ff = np.real(np.exp(logterms - logsumk[idx]))
+            logsumk[idx] = logsumk[idx] + np.log1p(ff) #logsumk[idx] = np.logaddexp(logsumk[idx], np.log(ff)) #I changed this one too
+            idx[idx] = np.abs(ff) > 1e-4
+            if not np.any(idx):
+                break
+
+        pdfln = np.real(pdfln + logsumk.T)
+
+    return pdfln
+
+def slog(x):
+    realmin = np.finfo(float).tiny
+    realmax = np.finfo(float).max
+    x_clamped = np.clip(x,realmin,realmax)
+    return np.log(x_clamped)
+
+
+
+
 
 x1 = np.linspace(-5, 5, 100)
 x2 = np.linspace(-5, 5, 100)
@@ -1401,14 +1477,143 @@ print(f"b2 difference: {np.abs(np.array(b2_true) - estimated_params[7:9])}")
 
 
 
+def negative_log_likelihood(params, x):
+    """
+    Negative log-likelihood for the bivariate NCT distribution.
+    
+    Parameters:
+    params : ndarray
+        Parameter vector: [mu1, mu2, gam1, gam2, v, Sigma_11, Sigma_12, Sigma_22].
+    x : ndarray
+        T x 2 dataset (bivariate observations).
+        
+    Returns:
+    float
+        Negative log-likelihood value.
+    """
+    # Extract parameters
+    mu = np.array([params[0], params[1]])  # Location vector
+    gam = np.array([params[2], params[3]])  # Noncentrality vector
+    v = params[4]  # Degrees of freedom
+    Sigma = np.array([
+        [params[5], params[6]],  # Covariance matrix
+        [params[6], params[7]]
+    ])
+
+    """  linear algebra requirements check, there might be something wrong w this  
+    if not np.all(np.isfinite(Sigma)):
+        print("Invalid Sigma (contains NaNs or infs):", Sigma)
+        return np.inf  # Penalize invalid Sigma
+
+    # Ensure Sigma is positive definite
+    if np.any(np.linalg.eigvals(Sigma) <= 0):
+        print("Non-positive definite Sigma:", Sigma)
+        return np.inf
+    
+
+     """   
+    # Call the provided log-density function
+    
+    
+    try:
+        log_pdf = mvnctpdf_ln(x, mu, gam, v, Sigma)
+    except ValueError as e:
+        # Handle any errors (e.g., non-positive-definite Sigma)
+        return np.inf
+    
+    # Return the negative log-likelihood
+    return -np.sum(log_pdf)
+
+
+def compute_mle(data_set, x_0, bounds = [(-10, 10), (-10, 10),(-5, 5), (-5, 5), (2, 50), (0.01, 10), (-5, 5), (0.01, 10)]):
+    
+    # Minimize the negative log-likelihood
+    result = minimize(
+        fun=negative_log_likelihood,
+        x0=x_0,
+        args=(data_set,),
+        method='L-BFGS-B',
+        options={'disp': False}  # Display optimization details
+    )
+    
+    # Check for successful optimization
+    if not result.success:
+        raise RuntimeError(f"Optimization failed: {result.message}")
+    
+    # Return the estimated parameters
+    return result.data_set
 
 
 
 
+x_0 = [
+    0.0, 0.0,  # mu1, mu2
+    0.0, 0.0,  # gam1, gam2
+    5.0,        # v (degrees of freedom)
+    1.0, 0.0, 1.0  # Sigma_11, Sigma_12, Sigma_22
+]
+
+np.random.seed(42)
+x = np.random.multivariate_normal(
+    mean=[1.0, 2.0],
+    cov=[[1.0, 0.5], [0.5, 1.5]],
+    size=200
+)
+
+mle_params = compute_mle(x, x_0)
+print("sadsfljkajdsflkajdfs")
+print("Estimated Parameters:", mle_params)
+
+
+
+#This version is a not robust one of the previous
+#%%
+
+def negative_log_likelihood(params, x):
+    mu = np.array([params[0], params[1]])  # Location vector
+    gam = np.array([params[2], params[3]])  # Noncentrality vector
+    v = params[4]  # Degrees of freedom
+    Sigma = np.array([
+        [params[5], params[6]],  # Covariance matrix
+        [params[6], params[7]]
+    ])    
+    log_pdf = mvnctpdf_ln(x, mu, gam, v, Sigma)
+    
+    return -np.sum(log_pdf)
+
+
+def compute_mle(data_set, x_0):    
+    # Minimize the negative log-likelihood
+    result = minimize(
+        fun=negative_log_likelihood,
+        x0=x_0,
+        args=(data_set,),
+        method='L-BFGS-B',
+        options={'disp': False}
+    )
+    
+    if not result.success:
+        raise RuntimeError(f"Optimization failed: {result.message}")
+    
+    return result.data_set
 
 
 
 
+x_0 = [
+    0.0, 0.0,  # mu1, mu2
+    0.0, 0.0,  # gam1, gam2
+    5.0,        # v (degrees of freedom)
+    1.0, 0.0, 1.0  # Sigma_11, Sigma_12, Sigma_22
+]
 
+np.random.seed(42)
+x = np.random.multivariate_normal(
+    mean=[1.0, 2.0],
+    cov=[[1.0, 0.5], [0.5, 1.5]],
+    size=200
+)
 
-
+mle_params = compute_mle(x, x_0)
+print("sadsfljkajdsflkajdfs")
+print("Estimated Parameters:", mle_params)
