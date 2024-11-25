@@ -889,8 +889,7 @@ import matplotlib.pyplot as plt
 """
 def mvnctpdf_ln(x, mu, gam, v, Sigma):
     
-    """
-    """
+    """"""
     Direct density approximation (d.d.a.) for the log of the d-variate canonical MVNCT density.
 
     Parameters:
@@ -908,8 +907,7 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
     Returns:
     pdf_ln : ndarray
         Logarithm of the probability density function at the evaluation points.
-    """
-    """
+    """"""
     # Dimensions
     d, T = x.shape
 
@@ -967,15 +965,13 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
 
 # Truncated logarithm function
 def slog(x):
-    """
+
     #Truncated logarithm to avoid numerical issues with -inf or +inf.
-    """
     realmin = np.finfo(np.float64).tiny
     realmax = np.finfo(np.float64).max
     return np.log(np.clip(x, realmin, realmax))
-
-
-"""
+    """
+    
 #%% Test for the plots
 
 import numpy as np
@@ -1024,7 +1020,9 @@ def plot_mvnct_density(mu, gam, v, Sigma, title):
 
 # This is the part i told you about
 # Prep. 3
-"""
+
+
+# This code worked (i think)
 def mvnctpdf_ln(x, mu, gam, v, Sigma):
     d, T = x.shape
     C = np.linalg.cholesky(Sigma)
@@ -1032,8 +1030,10 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
     mu = mu.reshape(-1, 1) if mu.ndim == 1 else mu
     gam = gam.reshape(-1, 1) if gam.ndim == 1 else gam
     vn2 = (v + d) / 2
-
-    xm = x - mu
+    print("Aquí hay un error akjdsfhlahjdsfkljsahdslfa", x.shape)
+    print("imprime la puta cabrona pendeja mierda", mu.shape)
+    xm = x - np.tile(mu, (1, T))
+    print("La pendeja suma sí se está haciendo", xm.shape)
     xm = np.linalg.solve(C, xm)
     rho = np.sum((xm - gam) ** 2, axis=0)
     pdf_ln = gammaln(vn2) - (d / 2) * np.log(np.pi * v) - gammaln(v / 2) \
@@ -1064,23 +1064,27 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
 
     print(f"Iteration {k}, max logterms: {np.max(logterms)}, min logterms: {np.min(logterms)}")
     return pdf_ln
-"""
 
-def mvnctpdf_ln(x, mu, gam, v, Sigma):
-    d, t = x.shape
+
+# Trash
+def mvnctpdf_ln3(x, mu, gam, v, Sigma):
+    d, T = x.shape
     C = Sigma
     R = cholesky(C, lower=True)
     assert np.all(np.diag(R) > 0), "C is not (semi) positive definite"
 
     mu = np.reshape(mu, (-1, 1))
+    print("tamaño de mu",mu)
+    print("X es:", x)
     gam = np.reshape(gam, (-1, 1))
     vn2 = (v + d) / 2
-    xm = x - mu
+    xm = x - np.tile(mu, (1, T))
     rho = np.sum((np.linalg.solve(R.T, xm))**2, axis=0)
     
     pdfln = (gammaln(vn2) 
              - (d / 2) * np.log(np.pi * v) 
-             - np.sum(np.log(np.diag(R))) 
+             -gammaln(v/2)
+             - np.sum(slog(np.diag(R))) 
              - vn2 * np.log1p(rho / v))
     
     if np.all(gam == 0):
@@ -1095,7 +1099,7 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
         pdfln -= 0.5 * gcg
         xcg = np.dot(xm.T, np.linalg.solve(C, gam))
         term = (0.5 * np.log(2) 
-                + np.log(xcg) 
+                + np.log(xcg) #There might be a mistake in this line
                 - 0.5 * slog(v + rho.T))
         
         term[term == -np.inf] = np.log(np.finfo(float).tiny)
@@ -1118,7 +1122,7 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
                         + k * term[idx]) #Check on this condition
             ff = np.real(np.exp(logterms - logsumk[idx]))
             logsumk[idx] = logsumk[idx] + np.log1p(ff) #logsumk[idx] = np.logaddexp(logsumk[idx], np.log(ff)) #I changed this one too
-            idx[idx] = np.abs(ff) > 1e-4
+            idx[idx] = np.abs(ff[idx]) > 1e-4
             if not np.any(idx):
                 break
 
@@ -1135,7 +1139,7 @@ def slog(x):
 
 
 
-
+# Trash (but not quite)
 x1 = np.linspace(-5, 5, 100)
 x2 = np.linspace(-5, 5, 100)
 
@@ -1527,7 +1531,7 @@ def negative_log_likelihood(params, x):
     return -np.sum(log_pdf)
 
 
-def compute_mle(data_set, x_0, bounds = [(-10, 10), (-10, 10),(-5, 5), (-5, 5), (2, 50), (0.01, 10), (-5, 5), (0.01, 10)]):
+def compute_mle(data_set, x_0):
     
     # Minimize the negative log-likelihood
     result = minimize(
@@ -1543,7 +1547,7 @@ def compute_mle(data_set, x_0, bounds = [(-10, 10), (-10, 10),(-5, 5), (-5, 5), 
         raise RuntimeError(f"Optimization failed: {result.message}")
     
     # Return the estimated parameters
-    return result.data_set
+    return result.x
 
 
 
@@ -1561,8 +1565,9 @@ x = np.random.multivariate_normal(
     cov=[[1.0, 0.5], [0.5, 1.5]],
     size=200
 )
+x = 
 
-mle_params = compute_mle(x, x_0)
+mle_params = compute_mle(x.T, x_0)
 print("sadsfljkajdsflkajdfs")
 print("Estimated Parameters:", mle_params)
 
@@ -1571,6 +1576,8 @@ print("Estimated Parameters:", mle_params)
 #This version is a not robust one of the previous
 #%%
 
+
+# Program 1
 def negative_log_likelihood(params, x):
     mu = np.array([params[0], params[1]])  # Location vector
     gam = np.array([params[2], params[3]])  # Noncentrality vector
@@ -1597,7 +1604,7 @@ def compute_mle(data_set, x_0):
     if not result.success:
         raise RuntimeError(f"Optimization failed: {result.message}")
     
-    return result.data_set
+    return result.x
 
 
 
@@ -1607,7 +1614,10 @@ x_0 = [
     0.0, 0.0,  # gam1, gam2
     5.0,        # v (degrees of freedom)
     1.0, 0.0, 1.0  # Sigma_11, Sigma_12, Sigma_22
+    
 ]
+
+# I tried using a generated sample but it doesnt work, im so fkn tired
 
 np.random.seed(42)
 x = np.random.multivariate_normal(
@@ -1616,6 +1626,129 @@ x = np.random.multivariate_normal(
     size=200
 )
 
-mle_params = compute_mle(x, x_0)
+mle_params = compute_mle(x.T, x_0)
 print("sadsfljkajdsflkajdfs")
 print("Estimated Parameters:", mle_params)
+
+
+#%% Test of the previous code but for a Gaussian sample
+
+import numpy as np
+from scipy.optimize import minimize
+from scipy.stats import multivariate_normal
+
+# Define the negative log-likelihood for the bivariate Gaussian distribution
+def negative_log_likelihood(params, x):
+    mu = np.array([params[0], params[1]])  # Mean vector
+    Sigma = np.array([
+        [params[2], params[3]],  # Covariance matrix
+        [params[3], params[4]]
+    ])
+    
+    # Check if the covariance matrix is valid (positive semi-definite)
+    # This part is not included in the previous code
+    if np.linalg.det(Sigma) <= 0:
+        return np.inf  # Return a high value to penalize invalid covariance matrices
+
+    # Compute the log likelihood using scipy's multivariate_normal
+    log_pdf = multivariate_normal.logpdf(x, mean=mu, cov=Sigma)
+    return -np.sum(log_pdf)  # Negative log-likelihood
+
+# Define a function to compute the MLE
+def compute_mle_example(data_set, x_0):    
+    # Minimize the negative log-likelihood
+    result = minimize(
+        fun=negative_log_likelihood,
+        x0=x_0,
+        args=(data_set,),
+        method='L-BFGS-B',
+        options={'disp': False}
+    )
+    
+    if not result.success:
+        raise RuntimeError(f"Optimization failed: {result.message}")
+    
+    return result.x  # Return the estimated parameters
+
+# Initial parameters for Gaussian MLE
+# mu1, mu2, Sigma_11, Sigma_12, Sigma_22
+x_0 = [
+    0.0, 0.0,  # Initial guess for mean
+    1.0, 0.0, 1.0  # Initial guess for covariance matrix
+]
+
+# Generate synthetic bivariate Gaussian data
+np.random.seed(42)
+x = np.random.multivariate_normal(
+    mean=[1.0, 2.0],
+    cov=[[1.0, 0.5], [0.5, 1.5]],
+    size=200
+)
+
+# Compute the MLE
+mle_params = compute_mle(x, x_0)
+
+# Display the results
+print("Estimated Parameters:")
+print("Mean (mu1, mu2):", mle_params[:2])
+print("Covariance Matrix:")
+print(f"[[{mle_params[2]:.4f}, {mle_params[3]:.4f}]")
+print(f" [{mle_params[3]:.4f}, {mle_params[4]:.4f}]]")
+
+#%% Test for P1
+
+#This is a function to sample a dataset of mvnct
+def sample_mvnct(mu, Sigma, v, size=1):
+    
+    mu = np.asarray(mu)  # Ensure mu is a NumPy array
+    d = len(mu)  # Dimensionality of the distribution
+    
+    # Step 1: Sample from a standard multivariate normal distribution
+    Z = np.random.multivariate_normal(mean=np.zeros(d), cov=Sigma, size=size)
+    
+    # Step 2: Sample from a chi-squared distribution with v degrees of freedom
+    W = np.random.chisquare(df=v, size=size)
+    
+    # Step 3: Transform Z and W to generate MVNCT samples
+    # Each row of Z corresponds to a sample from MVNCT
+    samples = mu + Z / np.sqrt(W[:, None] / v)
+    
+    return samples
+x_0 = [
+    1.0, 0.0,  # mu1, mu2
+    0.0, 1.0,  # gam1, gam2
+    6.0,        # v (degrees of freedom)
+    1.0, 0.0, 1.0 ] # Sigma_11, Sigma_12, Sigma_22
+    
+
+
+    
+mu = [0, 0]  # Mean vector (non-centrality)
+Sigma = [[1, 0.5], [0.5, 1]]  # Covariance matrix
+v = 5  # Degrees of freedom
+n_samples = 1000  # Number of samples to generate
+
+# Generate samples
+np.random.seed(42)
+samples = sample_mvnct(mu, Sigma, v, size=n_samples)
+
+mle_params = compute_mle(samples, x_0)
+
+# Display the results
+print("Estimated Parameters:")
+print("Mean (mu1, mu2):", mle_params[:2])
+print("Covariance Matrix:")
+print(f"[[{mle_params[2]:.4f}, {mle_params[3]:.4f}]")
+print(f" [{mle_params[3]:.4f}, {mle_params[4]:.4f}]]")
+
+
+
+#%% 
+
+# Program 2
+
+def compute_mle_p2(data_set, x_0):
+    result_mixture_laplace = minimize(fun = , x0)
+    
+
+
