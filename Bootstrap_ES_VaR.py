@@ -808,10 +808,8 @@ def asymstabpdf(x, a, b):
 
 def generate_asymstab_samples(n, alpha, beta=0, mu=0, scale=1):
     u = np.random.uniform(0, 1, n)
-    samples = np.zeros(n)
-    for i in (range(n)):
-        samples[i] = brentq(lambda x: levy_stable.cdf(x, alpha, beta) - u[i], -1e6, 1e6)
-    return mu + scale * samples
+    samples = levy_stable.ppf(u, alpha, beta, mu, scale)
+    return samples
 
 def mle_asymmetric_stable(data):
     def neg_log_likelihood(params):
@@ -827,20 +825,48 @@ def mle_asymmetric_stable(data):
 
 def parametric_bootstrap_asymstab(data, ESlevel=0.01, B=100, n=10000):
     alpha_mle, beta_mle, loc_mle, scale_mle = mle_asymmetric_stable(data)
+    print(alpha_mle, beta_mle, loc_mle, scale_mle)
     ES_samples = []
     VaR_samples = []
-    for k in tqdm(range(B)):
-        bootstrap_sample = generate_asymstab_samples(n, alpha_mle, beta_mle, loc_mle, scale_mle)
+    for _ in tqdm(range(B)):
+        bootstrap_sample = stabgen(n, alpha_mle, beta_mle, scale_mle, loc_mle)
         ES = expected_shortfall(bootstrap_sample, ESlevel)
         VaR = np.percentile(bootstrap_sample, ESlevel * 100)
         ES_samples.append(ES)
         VaR_samples.append(VaR)
     return ES_samples, VaR_samples
 
-asymstab_samples = generate_asymstab_samples(10000, 1.7, -0.3)
-True_ES, True_VaR = asymstableES(0.01, 1.7, -0.3)
 
-print(mle_asymmetric_stable(asymstab_samples))
+asymstab_samples = stabgen(10000, 1.7, -0.3)
+True_ES, True_VaR = asymstableES(0.01, 1.7, -0.3)
+boostrap_sample_asymstab, var_asymstab = parametric_bootstrap_asymstab(asymstab_samples, 0.01, 100, 10000)
+
+data = {'Expected Shortfall': (boostrap_sample_asymstab), 'Type': (['AsymStab'] * len(boostrap_sample_asymstab))}
+df = pd.DataFrame(data)
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Type', y='Expected Shortfall', data=df, flierprops=dict(marker='+', markeredgecolor='r', markersize=10), boxprops=dict(facecolor='none', edgecolor='blue'))
+plt.axhline(y=True_ES, color='g', linestyle='--', label='Original ES')
+plt.title('Boxplot of Expected Shortfall for DGP = Asymmetric Stable')
+plt.xlabel('Type')
+plt.ylabel('Expected Shortfall')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+data_var = {'VaR': (var_asymstab), 'Type': (['AsymStab'] * len(var_asymstab))}
+df_var = pd.DataFrame(data_var)
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Type', y='VaR', data=df_var, flierprops=dict(marker='+', markeredgecolor='r', markersize=10), boxprops=dict(facecolor='none', edgecolor='blue'))
+plt.axhline(y=True_VaR, color='g', linestyle='--', label='True VaR')
+plt.title('Boxplot of VaR for DGP = Asymmetric Stable')
+plt.xlabel('Type')
+plt.ylabel('VaR')
+plt.legend()
+plt.grid(True)
+plt.show()
+
 
 nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(asymstab_samples, 0.01, 100, 6667)
 bootstrap_samples_t, var_t = parametric_bootstrap_t(asymstab_samples, 0.01, 100, 10000)
@@ -848,7 +874,8 @@ bootstrap_samples_nonc, var_nonc = parametric_bootstrap_nonc(asymstab_samples, 0
 bootstrap_samples_gaussian, var_gaussian = parametric_bootstrap_gaussian(asymstab_samples, 0.01, 100, 10000)
 bootstrap_samples_mixed, var_mixed = parametric_bootstrap_mixed(asymstab_samples, 0.01, 100, 10000)
 parametric_bootstrap_GAt_samples, var_GAt = parametric_bootstrap_GAt(asymstab_samples, 0.01, 100, 10000)
-boostrap_sample_asymstab, var_asymstab = parametric_bootstrap_asymstab(asymstab_samples, 0.01, 100, 10000)
+
+
 
 data = {'Expected Shortfall': (nonparametric_bootstrap_samples + bootstrap_samples_t + bootstrap_samples_nonc + bootstrap_samples_gaussian + bootstrap_samples_mixed + parametric_bootstrap_GAt_samples + boostrap_sample_asymstab), 'Type': (['Nonparametric'] * len(nonparametric_bootstrap_samples) + ['Student t'] * len(bootstrap_samples_t) + ['Noncentral t'] * len(bootstrap_samples_nonc) + ['Gaussian'] * len(bootstrap_samples_gaussian) + ['2-Comp Normal'] * len(bootstrap_samples_mixed) + ['GAt'] * len(parametric_bootstrap_GAt_samples) + ['Asymmetric Stable'] * len(boostrap_sample_asymstab))}
 df = pd.DataFrame(data)
