@@ -113,7 +113,7 @@ sp_result = sp.kv(nu, x)
 our_result = bessel_k_int(nu, x)
 
 # This function only graphs the previous code over a range of values.
-def graph_difference(nu, x, x_values):
+def graph_difference(nu, x_values):
     y_values = [abs(bessel_k_int(nu, x_val) - sp.kv(nu, x_val)) for x_val in x_values]
     plt.figure(figsize=(10, 6))
     plt.plot(x_values, y_values, marker='o', linestyle='-', color='blue', label='Difference')
@@ -126,9 +126,9 @@ def graph_difference(nu, x, x_values):
 
 
 # You can change the range, after 20 the difference is minimal
-x_values = list(range(-100, 20))
+x_values = np.linspace(0, 20, 200)
     
-graph_difference(nu, x, x_values)
+graph_difference(nu, x_values)
 
 
 # Part b
