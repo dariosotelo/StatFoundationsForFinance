@@ -14,8 +14,9 @@ from matplotlib import cm  # For colormap
 from scipy.integrate import quad
 import scipy.special as sp
 from scipy.optimize import minimize
-from scipy.special import gammaln
+from scipy.special import gammaln, gamma, kv
 from scipy.linalg import cholesky
+
 
 
 #%% II.1
@@ -132,13 +133,142 @@ graph_difference(nu, x, x_values)
 
 # Part b
 # MLE of the k=2 component, d=2 (bivariate) discrete mixture of Laplace.
-def compute_mle_bivariate_discrete_mixture_laplace():
-    result = minimize(fun = neg_log_bvlp, 
-                      x0, 
-                      method="L-BFGS-B")
+def compute_mle_bivariate_discrete_mixture_laplace(data):
+    initial_params = np.random.rand(13)  # Locations, scales, Sigma terms, weight
+
+    # Minimize the negative log-likelihood using BFGS
+    result = minimize(
+        fun = negative_log_likelihood_two_component_mixture_bivariate_laplace,
+        x0=initial_params,
+        args=(data,),
+        method='BFGS'
+    )
+    return result.x
 
 
-def bivariate_discrete_laplace_logpdf(mean, scale, x):
+def bivariate_discrete_laplace_pdf(location, scale, Sigma, y):
+    """
+    Compute the PDF of the bivariate Laplace distribution as given in the formula.
+    
+    I got this out of Paolella's book
+
+    Parameters:
+    - y: ndarray, observation vector of size (d,)
+    - location (mu): ndarray, location vector of size (d,)
+    - Sigma: ndarray, positive-definite covariance matrix of size (d, d)
+    - scale (b): float, parameter of the gamma distribution (must be > 0)
+
+    Returns:
+    - PDF value at the given y.
+    """
+    d = len(location)  # Dimensionality
+    diff = y - location  # (y - mu)
+    m = np.dot(diff.T, np.linalg.inv(Sigma)).dot(diff)  # Quadratic form (y-mu)' * Sigma^(-1) * (y-mu)
+
+    # Determinant of Sigma
+    det_Sigma = np.linalg.det(Sigma)
+
+    # Precompute constants
+    normalization = 2 / (np.sqrt(det_Sigma) * (2 * np.pi)**(d / 2) * gamma(scale))
+    bessel_arg = np.sqrt(2 * m)
+    bessel_factor = kv(scale - d / 2, bessel_arg)  # Modified Bessel function of the second kind
+
+    # PDF value
+    pdf = normalization * ((bessel_arg/2)**(scale/2 - d/4)) * bessel_factor
+
+    return pdf
+
+
+
+def negative_log_likelihood_two_component_mixture_bivariate_laplace(params, data):
+    """
+    Compute the negative log-likelihood for a two-component bivariate Laplace mixture.
+
+    Parameters:
+    - params: ndarray, flattened parameter vector containing:
+        [location_1 (2 values), location_2 (2 values),
+         scale_1, scale_2,
+         Sigma_1 (4 values for 2x2 matrix), Sigma_2 (4 values for 2x2 matrix),
+         weight_1 (mixture weight for first component)]
+    - data: ndarray, dataset of size (n_samples, 2)
+
+    Returns:
+    - Negative log-likelihood (scalar).
+    """
+    # Extract parameters
+    loc1 = params[:2]  # Location for component 1
+    loc2 = params[2:4]  # Location for component 2
+    scale1, scale2 = params[4:6]  # Scales for components 1 and 2
+    
+    Sigma1 = np.array([[params[6], params[7]], [params[7], params[8]]])  # Sigma_1
+    Sigma2 = np.array([[params[9], params[10]], [params[10], params[11]]])  # Sigma_2
+    
+    weight1 = params[12]  # Mixture weight for component 1
+    weight2 = 1 - weight1  # Mixture weight for component 2 (ensures weights sum to 1)
+    
+    # Compute log-likelihood for each data point
+    log_likelihoods = []
+    for y in data:
+        # Mixture model: weighted sum of the two PDFs
+        pdf1 = weight1 * bivariate_discrete_laplace_pdf(loc1, scale1, Sigma1, y)
+        pdf2 = weight2 * bivariate_discrete_laplace_pdf(loc2, scale2, Sigma2, y)
+        mixture_pdf = pdf1 + pdf2
+        
+        # Logarithm of the PDF for numerical stability
+        if mixture_pdf > 0:
+            log_likelihoods.append(np.log(mixture_pdf))
+        else:
+            log_likelihoods.append(-np.inf)  # Penalize invalid PDFs
+    
+    # Negative log-likelihood
+    return -np.sum(log_likelihoods)
+
+
+np.random.seed(42)
+n_samples = 200
+data1 = np.random.randint(-5, 5, size=(n_samples // 2, 2))
+data2 = np.random.randint(5, 15, size=(n_samples // 2, 2))
+data = np.vstack([data1, data2])
+
+# Example dataset
+
+# Call the MLE computation function
+mle_params = compute_mle_bivariate_discrete_mixture_laplace(data)
+
+# Parse and print the results
+def print_mle_results(mle_params):
+    # Extract parameters
+    loc1 = mle_params[:2]  # Location vector for component 1
+    loc2 = mle_params[2:4]  # Location vector for component 2
+    scale1, scale2 = mle_params[4:6]  # Scale parameters
+    Sigma1 = np.array([[mle_params[6], mle_params[7]], [mle_params[7], mle_params[8]]])  # Covariance matrix for component 1
+    Sigma2 = np.array([[mle_params[9], mle_params[10]], [mle_params[10], mle_params[11]]])  # Covariance matrix for component 2
+    weight1 = mle_params[12]  # Mixture weight for component 1
+    weight2 = 1 - weight1  # Mixture weight for component 2
+
+    # Print results
+    print("Maximum Likelihood Estimates (MLE):\n")
+    print(f"Location for Component 1: {loc1}")
+    print(f"Location for Component 2: {loc2}")
+    print(f"Scale for Component 1: {scale1:.4f}")
+    print(f"Scale for Component 2: {scale2:.4f}")
+    print(f"Covariance Matrix for Component 1:\n{Sigma1}")
+    print(f"Covariance Matrix for Component 2:\n{Sigma2}")
+    print(f"Weight for Component 1: {weight1:.4f}")
+    print(f"Weight for Component 2: {weight2:.4f}")
+
+# Print the results
+print_mle_results(mle_params)
+
+
+
+
+
+
+
+
+#%% helpful junk
+def bivariate_discrete_laplace_logpdf_previous_version(mean, scale, x):
     """
     Log-probability density of the bivariate discrete Laplace distribution.
     Args:
