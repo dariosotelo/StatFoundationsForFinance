@@ -1057,10 +1057,10 @@ def mvnctpdf_ln(x, mu, gam, v, Sigma):
     mu = mu.reshape(-1, 1) if mu.ndim == 1 else mu
     gam = gam.reshape(-1, 1) if gam.ndim == 1 else gam
     vn2 = (v + d) / 2
-    print("Aquí hay un error akjdsfhlahjdsfkljsahdslfa", x.shape)
-    print("imprime la puta cabrona pendeja mierda", mu.shape)
+    print("Shape of x", x.shape)
+    print("Shape of mu", mu.shape)
     xm = x - np.tile(mu, (1, T))
-    print("La pendeja suma sí se está haciendo", xm.shape)
+    print("Shape of xm", xm.shape)
     xm = np.linalg.solve(C, xm)
     rho = np.sum((xm - gam) ** 2, axis=0)
     pdf_ln = gammaln(vn2) - (d / 2) * np.log(np.pi * v) - gammaln(v / 2) \
@@ -1209,7 +1209,7 @@ def bivariate_laplace(mu, b, n):
     x2 = np.random.laplace(loc=mu[1], scale=b[1], size=n)
     return np.column_stack((x1, x2))
 
-def simulate_mixture(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n):
+def simulate_mixture_bivariate_laplace(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n):
     """
     Simulate samples from a 2-component bivariate Laplace mixture.
     Parameters:
@@ -1253,7 +1253,7 @@ Sigma2 = np.array([[4, 2], [2, 4]])  # Covariance matrix for the second componen
 n = 1000  # Number of samples
 
 # Simulate the mixture
-samples = simulate_mixture(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n)
+samples = simulate_mixture_bivariate_laplace(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n)
 
 # Create a 3D scatter plot
 fig = plt.figure(figsize=(10, 7))
@@ -1309,7 +1309,7 @@ graph_difference(1.2, 2.0, x_values)
 
 # b) 
 
-
+# This part i am using it later on
 # I think we should check this definition of the function
 def bivariate_discrete_laplace_logpdf(mean, scale, x):
     """
@@ -1327,7 +1327,7 @@ def bivariate_discrete_laplace_logpdf(mean, scale, x):
     return -np.abs(x1 - mu1) / b1 - np.abs(x2 - mu2) / b2 - np.log(2 * b1 * b2)
 
 # Negative log-likelihood for the k=2 mixture model
-def negative_log_likelihood(params, x):
+def negative_log_likelihood_bvlp(params, x):
     """
     Negative log-likelihood for the k=2 component, d=2 discrete mixture of Laplace.
     Args:
@@ -1384,7 +1384,7 @@ bounds = [
 
 # Perform optimization using BFGS
 result = minimize(
-    fun=negative_log_likelihood,
+    fun=negative_log_likelihood_bvlp,
     x0=initial_guess,
     args=(data,),
     method='L-BFGS-B',
@@ -1469,7 +1469,7 @@ bounds = [
 # Perform optimization using the earlier code
 
 result = minimize(
-    fun=negative_log_likelihood,
+    fun=negative_log_likelihood_bvlp,
     x0=initial_guess,
     args=(data,),
     method='L-BFGS-B',
@@ -1509,7 +1509,7 @@ print(f"b2 difference: {np.abs(np.array(b2_true) - estimated_params[7:9])}")
 #%% II.3
 
 
-
+# Im not using this one afaik
 def negative_log_likelihood(params, x):
     """
     Negative log-likelihood for the bivariate NCT distribution.
@@ -1604,7 +1604,7 @@ print("Estimated Parameters:", mle_params)
 
 
 # Program 1
-def negative_log_likelihood(params, x):
+def negative_log_likelihood_bvnct(params, x):
     mu = np.array([params[0], params[1]])  # Location vector
     gam = np.array([params[2], params[3]])  # Noncentrality vector
     v = params[4]  # Degrees of freedom
@@ -1620,7 +1620,7 @@ def negative_log_likelihood(params, x):
 def compute_mle(data_set, x_0):    
     # Minimize the negative log-likelihood
     result = minimize(
-        fun=negative_log_likelihood,
+        fun=negative_log_likelihood_bvnct,
         x0=x_0,
         args=(data_set,),
         method='L-BFGS-B',
@@ -1771,7 +1771,7 @@ print(f" [{mle_params[3]:.4f}, {mle_params[4]:.4f}]]")
 
 #%% 
 
-# Program 2
+# Program 2 This is not program 2, the good code is in the next cell.
 
 import numpy as np
 from scipy.optimize import minimize
@@ -1785,6 +1785,7 @@ def safe_log(x):
 
 
 # Mixture Laplace Model
+# I dont think i usedthis function
 def neg_log_likelihood_mixture_laplace(params, data):
     pi, mu1_x, mu1_y, mu2_x, mu2_y, b1, b2 = params[:7]
     pi = 1 / (1 + np.exp(-pi))  # Map pi to (0, 1) using sigmoid
@@ -1801,7 +1802,29 @@ def neg_log_likelihood_mixture_laplace(params, data):
     return -np.sum(ll)
 
 
+# Mixture Laplace from above
+
+
+def bivariate_laplace(mu, b, n):
+    x1 = np.random.laplace(loc=mu[0], scale=b[0], size=n)
+    x2 = np.random.laplace(loc=mu[1], scale=b[1], size=n)
+    return np.column_stack((x1, x2))
+
+def simulate_mixture(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n):
+    n1 = int(pi * n)
+    n2 = n - n1
+    
+    samples1 = bivariate_laplace(mu1, b1, n1)
+    samples1 = samples1 @ np.linalg.cholesky(Sigma1).T  # Apply covariance
+    
+    samples2 = bivariate_laplace(mu2, b2, n2)
+    samples2 = samples2 @ np.linalg.cholesky(Sigma2).T  # Apply covariance
+
+    return np.vstack((samples1, samples2))
+
+
 # Bivariate NCT Model
+# Neither this one
 def neg_log_likelihood_bivariate_nct(params, data):
     mu_x, mu_y, gam_x, gam_y, v, sigma_x, sigma_y, rho = params
     mu = np.array([mu_x, mu_y])
@@ -1862,43 +1885,94 @@ def compute_mle(data, model, initial_guess):
     return result.x, -result.fun
 
 
-# Main Program
-def main(data):
-    T, d = data.shape
+#%%
 
-    # Initial guesses for both models
-    laplace_init = [0, 0, 0, 0, 0, 0, 0]  # pi, mu1_x, mu1_y, mu2_x, mu2_y, b1, b2
-    nct_init = [0, 0, 0, 0, np.log(5), 1, 1, 0]  # mu_x, mu_y, gam_x, gam_y, v, sigma_x, sigma_y, rho
+# This part should work when we fix the neg_log_likelihood of the bvnct
 
-    # Fit Mixture Laplace
-    params_laplace, log_likelihood_laplace = compute_mle(data, 'mixture_laplace', laplace_init)
-    aic_laplace, bic_laplace = compute_aic_bic(log_likelihood_laplace, len(laplace_init), T)
+def q3part2(data, initial_guess):
+         
+    initial_guess_mlp = initial_guess[0]
+    result_mixture_laplace = minimize(
+    fun=negative_log_likelihood_bvlp,
+    x0=initial_guess_mlp,
+    args=(data,),  # Pass the dataset to the function
+    method="L-BFGS-B"  # Robust method for bounds and large problems
+    )
+    
+    initial_guess_bvnct = initial_guess[1]
+    result_bvnct = minimize(
+    fun=negative_log_likelihood_bvnct,
+    x0=initial_guess_bvnct,
+    args=(data,),  # Pass the dataset to the function
+    method="L-BFGS-B"  # Robust method for bounds and large problems
+    )
+    
+    log_likelihood_mixture_laplace = -result_mixture_laplace.fun
+    log_likelihood_bvnct = -result_bvnct.fun
+    
+    # Number of parameters (dimensionality of initial_guess)
+    k_mlp = len(initial_guess_mlp)
+    k_bvnct = len(initial_guess_bvnct)
+    
+    # Number of data points
+    n = len(data)
+    
+    aic_mixture_laplace = 2 * k_mlp - 2 * log_likelihood_mixture_laplace
+    bic_mixture_laplace = k_mlp * np.log(n) - 2 * log_likelihood_mixture_laplace
+    
+    aic_bvnct = 2 * k_bvnct - 2 * log_likelihood_bvnct
+    bic_bvnct = k_bvnct * np.log(n) - 2 * log_likelihood_bvnct
 
-    # Fit Bivariate NCT
-    params_nct, log_likelihood_nct = compute_mle(data, 'bivariate_nct', nct_init)
-    aic_nct, bic_nct = compute_aic_bic(log_likelihood_nct, len(nct_init), T)
+    return {
+        "mixture_laplace": {"AIC": aic_mixture_laplace, "BIC": bic_mixture_laplace},
+        "bvnct": {"AIC": aic_bvnct, "BIC": bic_bvnct}
+    }
 
-    # Output Results
-    print("\nMixture Laplace Model:")
-    print(f"Parameters: {params_laplace}")
-    print(f"Log-Likelihood: {log_likelihood_laplace}")
-    print(f"AIC: {aic_laplace}, BIC: {bic_laplace}")
+# Test of q3part2 with some simulated data
+# This code part is the same as in question 1
 
-    print("\nBivariate NCT Model:")
-    print(f"Parameters: {params_nct}")
-    print(f"Log-Likelihood: {log_likelihood_nct}")
-    print(f"AIC: {aic_nct}, BIC: {bic_nct}")
+# Parameters
+pi = 0.7  # Mixing weight for the first component
+mu1 = [0, 0]  # Location parameters for the first component
+b1 = [10, 10]  # Scale parameters for the first component
+Sigma1 = np.array([[1, 0.5], [0.5, 1]])  # Covariance matrix for the first component
+
+mu2 = [0, 0]  # Location parameters for the second component
+b2 = [5, 5]  # Scale parameters for the second component
+Sigma2 = np.array([[4, 2], [2, 4]])  # Covariance matrix for the second component (more extreme returns)
+
+n = 1000  # Number of samples
+
+# Simulate the mixture
+samples = simulate_mixture_bivariate_laplace(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n)
+
+# Initial guesses
+
+initial_guess_bvlp = np.array([
+    0.5,        # w1 (weight of the first component)
+    0, 0,       # mu1_x, mu1_y (mean of the first component)
+    np.log(10), np.log(10),  # b1_x, b1_y (scale of the first component)
+    3, 3,       # mu2_x, mu2_y (mean of the second component)
+    np.log(5), np.log(5)     # b2_x, b2_y (scale of the second component)
+])
+
+initial_guess_bvnct = np.array([
+    0, 0,       # mu_x, mu_y (location vector)
+    0.5, 0.5,   # gamma_x, gamma_y (noncentrality vector)
+    10,         # v (degrees of freedom)
+    1, 0, 1     # Sigma_xx, Sigma_xy, Sigma_yy (covariance matrix elements)
+])
+
+initial_guess = [
+    initial_guess_bvlp,  
+    initial_guess_bvnct   
+]
 
 
-# Example Usage
-if __name__ == "__main__":
-    # Generate example data (replace with real data)
-    np.random.seed(42)
-    data = np.random.rand(100, 2)  # T x 2 data
+q3part2(samples, initial_guess)
 
-    # Run the program
-    main(data)
+#%% II.4
 
 
 
-# Prueba git
+
