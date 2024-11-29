@@ -1888,8 +1888,8 @@ def compute_mle(data, model, initial_guess):
 #%%
 
 # This part should work when we fix the neg_log_likelihood of the bvnct
-
-def q3part2(data, initial_guess):
+# Q3 part 2
+def aic_bic_bvlp_bvnct(data, initial_guess):
          
     initial_guess_mlp = initial_guess[0]
     result_mixture_laplace = minimize(
@@ -1923,10 +1923,7 @@ def q3part2(data, initial_guess):
     aic_bvnct = 2 * k_bvnct - 2 * log_likelihood_bvnct
     bic_bvnct = k_bvnct * np.log(n) - 2 * log_likelihood_bvnct
 
-    return {
-        "mixture_laplace": {"AIC": aic_mixture_laplace, "BIC": bic_mixture_laplace},
-        "bvnct": {"AIC": aic_bvnct, "BIC": bic_bvnct}
-    }
+    return aic_mixture_laplace, bic_mixture_laplace, aic_bvnct, bic_bvnct
 
 # Test of q3part2 with some simulated data
 # This code part is the same as in question 1
@@ -1968,19 +1965,30 @@ initial_guess = [
     initial_guess_bvnct   
 ]
 
-
-q3part2(samples, initial_guess)
+# The order of printing is this one: aic_mixture_laplace, bic_mixture_laplace, aic_bvnct, bic_bvnct
+print(aic_bic_bvlp_bvnct(samples, initial_guess))
 
 #%% II.4
+import pandas as pd
 
 # Reading the data.
+df = pd.read_csv("DJIA30stockreturns.csv")
 
+def aic_bic_model_comparison_mlaplace_bvnct(data, rep):
+    results_matrix_laplace_mixture = np.zeros((rep, 4))
+    results_matrix_bvnct = np.zeros((rep, 4))
+    for i in range(rep):
+        random_stock1 = np.random.randint(0, 25)
+        random_stock2 = np.random.randint(0, 25)
+        stock_1 = data.iloc[:, random_stock1].to_numpy()
+        stock_2 = data.iloc[:, random_stock2].to_numpy()
+        aic_mixture_laplace1, bic_mixture_laplace1, aic_bvnct1, bic_bvnct1 = aic_bic_bvlp_bvnct(stock_1, initial_guess)
+        aic_mixture_laplace2, bic_mixture_laplace2, aic_bvnct2, bic_bvnct2 = aic_bic_bvlp_bvnct(stock_2, initial_guess)
+        results_matrix_laplace_mixture[i, :] = [aic_mixture_laplace1, bic_mixture_laplace1, aic_mixture_laplace2, bic_mixture_laplace2]
+        results_matrix_bvnct[i, :] = [aic_bvnct1, bic_bvnct1, aic_bvnct2, bic_bvnct2]
+    return results_matrix_laplace_mixture, results_matrix_bvnct
 
-
-
-
-
-
+aic_bic_model_comparison_mlaplace_bvnct(df, 50)
 
 
 
