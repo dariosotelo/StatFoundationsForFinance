@@ -11,6 +11,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm  # For colormap
+from scipy.integrate import quad
+import scipy.special as sp
+from scipy.optimize import minimize
+from scipy.special import gammaln
+from scipy.linalg import cholesky
 
 
 #%% II.1
@@ -88,4 +93,70 @@ plt.colorbar(sm, ax=ax, shrink=0.5, aspect=10, label="Density")
 plt.show()
 
 #%% II.2
+
+# Our definition of the bessel_k
+def bessel_k_int(nu, x):
+    integrand = lambda u: 0.5*u**(nu-1)*np.exp(-x/2*(1/u+u))
+    result, _ = quad(integrand, 0, np.inf)
+    return result
+
+# There is no constraint in nu, feel free to change it as you wish
+nu = 2
+x = 2.0
+
+# Python's definition of the bessel_k
+sp_result = sp.kv(nu, x)
+our_result = bessel_k_int(nu, x)
+
+# This function only graphs the previous code over a range of values.
+def graph_difference(nu, x, x_values):
+    y_values = [abs(bessel_k_int(nu, x_val) - sp.kv(nu, x_val)) for x_val in x_values]
+    plt.figure(figsize=(10, 6))
+    plt.plot(x_values, y_values, marker='o', linestyle='-', color='blue', label='Difference')
+    plt.title('Difference between bessel_k_int and scipy bessel_k')
+    plt.xlabel('x values')
+    plt.ylabel('Absolute Difference')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+# You can change the range, after 20 the difference is minimal
+x_values = list(range(-100, 20))
+    
+graph_difference(nu, x, x_values)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
