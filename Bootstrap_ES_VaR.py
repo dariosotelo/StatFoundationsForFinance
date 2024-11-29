@@ -1455,7 +1455,7 @@ def negative_log_likelihood(params, x):
     
     
     try:
-        log_pdf = mvnctpdf_ln(x, mu, gam, v, Sigma)
+        log_pdf = mvnctpdfln(x, mu, gam, v, Sigma)
     except ValueError as e:
         # Handle any errors (e.g., non-positive-definite Sigma)
         return np.inf
@@ -1518,7 +1518,7 @@ def negative_log_likelihood_bvnct(params, x):
         [params[5], params[6]],  # Covariance matrix
         [params[6], params[7]]
     ])    
-    log_pdf = mvnctpdf_ln(x, mu, gam, v, Sigma)
+    log_pdf = mvnctpdfln(x, mu, gam, v, Sigma)
     
     return -np.sum(log_pdf)
 
