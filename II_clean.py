@@ -134,7 +134,15 @@ graph_difference(nu, x, x_values)
 # Part b
 # MLE of the k=2 component, d=2 (bivariate) discrete mixture of Laplace.
 def compute_mle_bivariate_discrete_mixture_laplace(data):
-    initial_params = np.random.rand(13)  # Locations, scales, Sigma terms, weight
+    #initial_params = np.random.rand(13)  # Locations, scales, Sigma terms, weight
+    initial_params = np.array([
+        1.2, 2.1,          # loc1 (mean of component 1)
+        5.2, 6.9,          # loc2 (mean of component 2)
+        1.0, 0.9,      # scale1, scale2
+        1.0, 0.02, 1.0, # Sigma1 (3 values: [var1, cov, var2])
+        1.4, -0.2, 0.6,# Sigma2 (3 values: [var1, cov, var2])
+        0.5            # weight1 (mixture weight for component 1)
+    ])
 
     # Minimize the negative log-likelihood using BFGS
     result = minimize(
@@ -223,20 +231,69 @@ def negative_log_likelihood_two_component_mixture_bivariate_laplace(params, data
     # Negative log-likelihood
     return -np.sum(log_likelihoods)
 
+def generate_bivariate_discrete_laplace_with_sigma_param(n, params):
+    """
+    Generate synthetic data from a k=2 bivariate discrete mixture of Laplace with correlation (via Sigma matrix).
+    Args:
+        n: Number of samples.
+        params: Array of parameters, containing:
+            - loc1: Location vector for component 1 (2 values)
+            - loc2: Location vector for component 2 (2 values)
+            - scale1, scale2: Scales for components 1 and 2 (2 values)
+            - Sigma1: Covariance matrix for component 1 (3 independent values)
+            - Sigma2: Covariance matrix for component 2 (3 independent values)
+            - weight1: Mixture weight for component 1 (1 value)
+    Returns:
+        Synthetic bivariate data (n x 2 array).
+    """
+    # Extract parameters
+    loc1 = params[:2]  # Location for component 1
+    loc2 = params[2:4]  # Location for component 2
+    scale1, scale2 = params[4:6]  # Scales for components 1 and 2
+    
+    Sigma1 = np.array([[params[6], params[7]], [params[7], params[8]]])  # Sigma_1
+    Sigma2 = np.array([[params[9], params[10]], [params[10], params[11]]])  # Sigma_2
+    
+    weight1 = params[12]  # Mixture weight for component 1
+    weight2 = 1 - weight1  # Mixture weight for component 2 (ensures weights sum to 1)
+    
+    # Ensure covariance matrices are valid
+    if not (np.all(np.linalg.eigvals(Sigma1) > 0) and np.all(np.linalg.eigvals(Sigma2) > 0)):
+        raise ValueError("Covariance matrices must be positive definite.")
+    
+    # Initialize storage for the data
+    data = np.zeros((n, 2))
 
-np.random.seed(42)
-n_samples = 200
-data1 = np.random.randint(-5, 5, size=(n_samples // 2, 2))
-data2 = np.random.randint(5, 15, size=(n_samples // 2, 2))
-data = np.vstack([data1, data2])
+    for i in range(n):
+        # Randomly choose component based on weights
+        if i < n*weight1:
+            # Component 1
+            z = np.random.laplace(0, scale1, size=2)  # Independent Laplace samples
+            data[i] = loc1 + np.linalg.cholesky(Sigma1) @ z
+        else:
+            # Component 2
+            z = np.random.laplace(0, scale2, size=2)  # Independent Laplace samples
+            data[i] = loc2 + np.linalg.cholesky(Sigma2) @ z
+    
+    return data
 
-# Example dataset
+# Example parameters
+params = np.array([
+    1, 2,          # loc1 (mean of component 1)
+    5, 6,          # loc2 (mean of component 2)
+    1.0, 1.2,      # scale1, scale2
+    1.0, 0.5, 1.0, # Sigma1 (3 values: [var1, cov, var2])
+    1.5, -0.3, 0.8,# Sigma2 (3 values: [var1, cov, var2])
+    0.6            # weight1 (mixture weight for component 1)
+])
 
-# Call the MLE computation function
-mle_params = compute_mle_bivariate_discrete_mixture_laplace(data)
+# Generate synthetic data
+T = 1000
+data = generate_bivariate_discrete_laplace_with_sigma_param(T, params)
 
-# Parse and print the results
-def print_mle_results(mle_params):
+params1 = compute_mle_bivariate_discrete_mixture_laplace(data)
+
+def print_mle_results(params):
     # Extract parameters
     loc1 = mle_params[:2]  # Location vector for component 1
     loc2 = mle_params[2:4]  # Location vector for component 2
@@ -258,8 +315,7 @@ def print_mle_results(mle_params):
     print(f"Weight for Component 2: {weight2:.4f}")
 
 # Print the results
-print_mle_results(mle_params)
-
+print_mle_results(params1)
 
 
 
@@ -316,12 +372,106 @@ def negative_log_likelihood_bvlp(params, x):
 
 
 
+# Printing shii
+
+
+np.random.seed(42)
+n_samples = 200
+data1 = np.random.randint(-5, 5, size=(n_samples // 2, 2))
+data2 = np.random.randint(5, 15, size=(n_samples // 2, 2))
+data = np.vstack([data1, data2])
+
+# Example dataset
+
+# Call the MLE computation function
+mle_params = compute_mle_bivariate_discrete_mixture_laplace(data)
+
+# Parse and print the results
+def print_mle_results(mle_params):
+    # Extract parameters
+    loc1 = mle_params[:2]  # Location vector for component 1
+    loc2 = mle_params[2:4]  # Location vector for component 2
+    scale1, scale2 = mle_params[4:6]  # Scale parameters
+    Sigma1 = np.array([[mle_params[6], mle_params[7]], [mle_params[7], mle_params[8]]])  # Covariance matrix for component 1
+    Sigma2 = np.array([[mle_params[9], mle_params[10]], [mle_params[10], mle_params[11]]])  # Covariance matrix for component 2
+    weight1 = mle_params[12]  # Mixture weight for component 1
+    weight2 = 1 - weight1  # Mixture weight for component 2
+
+    # Print results
+    print("Maximum Likelihood Estimates (MLE):\n")
+    print(f"Location for Component 1: {loc1}")
+    print(f"Location for Component 2: {loc2}")
+    print(f"Scale for Component 1: {scale1:.4f}")
+    print(f"Scale for Component 2: {scale2:.4f}")
+    print(f"Covariance Matrix for Component 1:\n{Sigma1}")
+    print(f"Covariance Matrix for Component 2:\n{Sigma2}")
+    print(f"Weight for Component 1: {weight1:.4f}")
+    print(f"Weight for Component 2: {weight2:.4f}")
+
+# Print the results
+print_mle_results(mle_params)
 
 
 
 
 
+import numpy as np
 
+def generate_bivariate_discrete_laplace_with_sigma(n, param, loc1, loc2, scale1, scale2, Sigma111, Sigma112, Sigma122, Sigma211, Sigma212, Sigma222, w1):
+    """
+    Generate synthetic data from a k=2 bivariate discrete mixture of Laplace with correlation (via Sigma matrix).
+    Args:
+        n: Number of samples.
+        w1: Weight of the first component.
+        mu1: Mean vector of the first component.
+        b1: Scale parameter of the first component.
+        sigma1: Covariance matrix of the first component.
+        mu2: Mean vector of the second component.
+        b2: Scale parameter of the second component.
+        sigma2: Covariance matrix of the second component.
+    Returns:
+        Synthetic bivariate data (n x 2 array).
+    """    
+    
+    # Initialize storage for the data
+    data = np.zeros((n, 2))
+    
+    sigma1 = [[Sigma111, Sigma112],
+              [Sigma112, Sigma122]]
+    sigma2 = [[Sigma211, Sigma212],
+              [Sigma212, Sigma222]]
+    for i in range(n):
+        # Randomly choose component based on weights
+        if np.random.rand() < w1:
+            # Component 1
+            z = np.random.laplace(0, scale1, size=2)  # Independent Laplace samples
+            data[i] = loc1 + np.linalg.cholesky(sigma1) @ z
+        else:
+            # Component 2
+            z = np.random.laplace(0, scale2, size=2)  # Independent Laplace samples
+            data[i] = loc2 + np.linalg.cholesky(sigma2) @ z
+    return data
+
+# True parameters
+w1_true = 0.6
+mu1_true = np.array([1, 2])
+b1_true = 1.0  # Scale for component 1
+sigma1_true = np.array([[1.0, 0.5], [0.5, 1.0]])  # Covariance matrix for component 1
+
+mu2_true = np.array([5, 6])
+b2_true = 1.2  # Scale for component 2
+sigma2_true = np.array([[1.5, -0.3], [-0.3, 0.8]])  # Covariance matrix for component 2
+
+# Generate synthetic data
+n_samples = 1000
+data = generate_bivariate_discrete_laplace_with_sigma(
+    n=n_samples, w1=w1_true, mu1=mu1_true, b1=b1_true, sigma1=sigma1_true,
+    mu2=mu2_true, b2=b2_true, sigma2=sigma2_true
+)
+
+# Print first 5 samples for verification
+print("Generated data (first 5 samples):")
+print(data[:5])
 
 
 
