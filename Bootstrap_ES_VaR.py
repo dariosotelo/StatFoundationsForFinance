@@ -1323,6 +1323,7 @@ def bivariate_discrete_laplace_logpdf(mean, scale, x):
     """
     mu1, mu2 = mean
     b1, b2 = scale
+    print("X:",x)
     x1, x2 = x[:, 0], x[:, 1]
     return -np.abs(x1 - mu1) / b1 - np.abs(x2 - mu2) / b2 - np.log(2 * b1 * b2)
 
@@ -1974,7 +1975,7 @@ import pandas as pd
 # Reading the data.
 df = pd.read_csv("DJIA30stockreturns.csv")
 
-def aic_bic_model_comparison_mlaplace_bvnct(data, rep):
+def aic_bic_model_comparison_mlaplace_bvnct(data, rep, initial_guess):
     results_matrix_laplace_mixture = np.zeros((rep, 4))
     results_matrix_bvnct = np.zeros((rep, 4))
     for i in range(rep):
@@ -1988,10 +1989,35 @@ def aic_bic_model_comparison_mlaplace_bvnct(data, rep):
         results_matrix_bvnct[i, :] = [aic_bvnct1, bic_bvnct1, aic_bvnct2, bic_bvnct2]
     return results_matrix_laplace_mixture, results_matrix_bvnct
 
-aic_bic_model_comparison_mlaplace_bvnct(df, 50)
 
 
+# Initial guesses
 
+initial_guess_bvlp = np.array([
+    0.5,        # w1 (weight of the first component)
+    0, 0,       # mu1_x, mu1_y (mean of the first component)
+    np.log(10), np.log(10),  # b1_x, b1_y (scale of the first component)
+    3, 3,       # mu2_x, mu2_y (mean of the second component)
+    np.log(5), np.log(5)     # b2_x, b2_y (scale of the second component)
+])
+
+initial_guess_bvnct = np.array([
+    0, 0,       # mu_x, mu_y (location vector)
+    0.5, 0.5,   # gamma_x, gamma_y (noncentrality vector)
+    10,         # v (degrees of freedom)
+    1, 0, 1     # Sigma_xx, Sigma_xy, Sigma_yy (covariance matrix elements)
+])
+
+initial_guess = [
+    initial_guess_bvlp,  
+    initial_guess_bvnct   
+]
+
+laplace_aic_bic, bvnct_aic_bic = aic_bic_model_comparison_mlaplace_bvnct(df, 50, initial_guess)
+
+
+# This is not working because we need some way to give the data to the mixture laplace from one array to a dx2 sized matrix
+# also there is a problem with the translation to python of the nct (again)
 
 
 
