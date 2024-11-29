@@ -905,15 +905,11 @@ plt.show()
 
 
 #%% Part 2 Prep
-
 import numpy as np
 from scipy.linalg import cho_solve, cho_factor
 from scipy.special import gammaln
 import matplotlib.pyplot as plt
-import math
-import numpy as np
 from scipy.linalg import cholesky, solve_triangular
-from scipy.special import gammaln
 
 def slog(x):
     # Truncated log to avoid -Inf or +Inf
@@ -923,27 +919,6 @@ def slog(x):
     return np.log(x_clipped)
 
 def mvnctpdfln(x, mu, gam, v, Sigma):
-    """
-    Compute the log pdf of the multivariate noncentral t-distribution.
-
-    Parameters
-    ----------
-    x : ndarray of shape (d, T)
-        Evaluation points.
-    mu : ndarray of shape (d,)
-        Location vector.
-    gam : ndarray of shape (d,)
-        Noncentrality vector.
-    v : float
-        Degrees of freedom.
-    Sigma : ndarray of shape (d, d)
-        Dispersion matrix.
-
-    Returns
-    -------
-    pdfLn : ndarray of shape (T,)
-        Log pdf values at x.
-    """
     x = np.asarray(x)
     mu = np.asarray(mu).reshape(-1, 1)
     gam = np.asarray(gam).reshape(-1, 1)
@@ -1037,8 +1012,6 @@ def mvnctpdfln(x, mu, gam, v, Sigma):
     return pdfLn.real
 
 
-
-
 # Parameters for the multivariate noncentral t-distribution
 mu = np.array([0, 0])        # Location vector (mean)
 gam = np.array([0, 1])       # Noncentrality vector
@@ -1065,204 +1038,62 @@ pdf_grid = pdf.reshape(X1.shape)
 plt.figure(figsize=(10, 8))
 contour = plt.contour(X1, X2, pdf_grid, levels=20)  # 20 contour levels
 plt.colorbar(contour, label='PDF')
-plt.title('PDF of Multivariate Noncentral t-Distribution')
+plt.title('PDF of Multivariate Noncentral t-Distribution (mu=[0,0], gam=[0,1], v=4, Sigma=[[1,0.5],[0.5,1]])')
 plt.xlabel('x1')
 plt.ylabel('x2')
 plt.xlim(x1.min(), x1.max())
 plt.ylim(x2.min(), x2.max())
 plt.gca().set_aspect('equal', adjustable='box')  # Ensure the aspect ratio is equal
 plt.show()
-    
-#%% Test for the plots
+# Parameters for the first plot
+mu1 = [0, 0]
+gam1 = [0, 0]
+v1 = 4
+Sigma1 = [[1, 0], [0, 1]]
 
-import numpy as np
-import matplotlib.pyplot as plt
-import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
-from scipy.integrate import quad
-import scipy.special as sp
-from scipy.optimize import minimize
-from scipy.special import gammaln
-from scipy.linalg import cholesky
+# Evaluate the log-PDF at each grid point for the first set of parameters
+pdfLn1 = mvnctpdfln(x, mu1, gam1, v1, Sigma1)
+pdf1 = np.exp(pdfLn1)
 
-# Extra
-def plot_mvnct_density(mu, gam, v, Sigma, title):
-    # Define grid for x1 and x2
-    x1 = np.linspace(-10, 10, 100)
-    x2 = np.linspace(-10, 10, 100)
-    X1, X2 = np.meshgrid(x1, x2)
-    grid = np.array([X1.ravel(), X2.ravel()])
+# Reshape the output PDF to match the grid for plotting
+pdf_grid1 = pdf1.reshape(X1.shape)
 
-    # Reshape inputs to column vectors
-    mu = np.reshape(mu, (-1, 1))
-    gam = np.reshape(gam, (-1, 1))
+# Plot the PDF as a contour plot for the first set of parameters
+plt.figure(figsize=(10, 8))
+contour1 = plt.contour(X1, X2, pdf_grid1, levels=20)  # 20 contour levels
+plt.colorbar(contour1, label='PDF')
+plt.title('PDF of Multivariate Noncentral t-Distribution (mu=[0,0], gam=[0,0], v=4, Sigma=[[1,0],[0,1]])')
+plt.xlabel('x1')
+plt.ylabel('x2')
+plt.xlim(x1.min(), x1.max())
+plt.ylim(x2.min(), x2.max())
+plt.gca().set_aspect('equal', adjustable='box')  # Ensure the aspect ratio is equal
+plt.show()
 
-    # Debugging: Print dimensions of inputs
-    print(f"mu shape: {mu.shape}, gam shape: {gam.shape}, Sigma shape: {Sigma.shape}")
+# Parameters for the second plot
+mu2 = [0, 0]
+gam2 = [0, 1]
+v2 = 4
+Sigma2 = [[1, 0], [0, 1]]
 
-    # Ensure Sigma is positive definite
-    if not np.all(np.linalg.eigvals(Sigma) > 0):
-        raise ValueError("Sigma must be positive definite.")
+# Evaluate the log-PDF at each grid point for the second set of parameters
+pdfLn2 = mvnctpdfln(x, mu2, gam2, v2, Sigma2)
+pdf2 = np.exp(pdfLn2)
 
-    # Compute the log density at each grid point
-    log_density = mvnctpdf_ln(grid, mu, gam, v, Sigma)
-    density = np.exp(log_density).reshape(X1.shape)  # Convert log density to density
+# Reshape the output PDF to match the grid for plotting
+pdf_grid2 = pdf2.reshape(X1.shape)
 
-    # Plot contour
-    plt.figure(figsize=(6, 6))
-    plt.contour(X1, X2, density, levels=15, cmap="viridis")
-    plt.title(title)
-    plt.xlabel(r"$X_1$")
-    plt.ylabel(r"$X_2$")
-    plt.colorbar(label="Density")
-    plt.grid(True)
-    plt.show()
-
-
-# This is the part i told you about
-# Prep. 3
-
-
-# This code worked (i think)
-def mvnctpdf_ln(x, mu, gam, v, Sigma):
-    d, T = x.shape
-    C = np.linalg.cholesky(Sigma)
-
-    mu = mu.reshape(-1, 1) if mu.ndim == 1 else mu
-    gam = gam.reshape(-1, 1) if gam.ndim == 1 else gam
-    vn2 = (v + d) / 2
-    print("Shape of x", x.shape)
-    print("Shape of mu", mu.shape)
-    xm = x - np.tile(mu, (1, T))
-    print("Shape of xm", xm.shape)
-    xm = np.linalg.solve(C, xm)
-    rho = np.sum((xm - gam) ** 2, axis=0)
-    pdf_ln = gammaln(vn2) - (d / 2) * np.log(np.pi * v) - gammaln(v / 2) \
-             - np.sum(np.log(np.diag(C))) - 0.5 * vn2 * np.log(1 + rho / v)
-
-    if np.all(gam == 0):
-        return pdf_ln
-
-    idx = (pdf_ln > -37)
-    maxiter = 1000
-    k = 0
-    logsumk = np.zeros_like(pdf_ln)
-
-    while np.any(idx) and k < maxiter:
-        gcg = np.sum((np.linalg.solve(C, gam)) ** 2)
-        term = 0.5 * np.log(2) + np.log(v + k) - 0.5 * np.log(v + rho) - 0.5 * gcg
-        logterms = gammaln((v + d + k) / 2) - gammaln((k + 1) / 2) - gammaln(vn2) + k * term
-        logterms = np.clip(logterms, -700, 700)  # Avoid numerical overflow
-        ff = np.exp(logterms[idx])
-        if np.all(np.abs(ff) < 1e-4):
-            break
-
-        logsumk[idx] = np.logaddexp(logsumk[idx], np.log(ff))
-        k += 1
-
-    pdf_ln += logsumk
-    print("Eigenvalues of Sigma:", np.linalg.eigvals(Sigma))
-
-    print(f"Iteration {k}, max logterms: {np.max(logterms)}, min logterms: {np.min(logterms)}")
-    return pdf_ln
-
-
-# Trash
-def mvnctpdf_ln3(x, mu, gam, v, Sigma):
-    d, T = x.shape
-    C = Sigma
-    R = cholesky(C, lower=True)
-    assert np.all(np.diag(R) > 0), "C is not (semi) positive definite"
-
-    mu = np.reshape(mu, (-1, 1))
-    print("tamaño de mu",mu)
-    print("X es:", x)
-    gam = np.reshape(gam, (-1, 1))
-    vn2 = (v + d) / 2
-    xm = x - np.tile(mu, (1, T))
-    rho = np.sum((np.linalg.solve(R.T, xm))**2, axis=0)
-    
-    pdfln = (gammaln(vn2) 
-             - (d / 2) * np.log(np.pi * v) 
-             -gammaln(v/2)
-             - np.sum(slog(np.diag(R))) 
-             - vn2 * np.log1p(rho / v))
-    
-    if np.all(gam == 0):
-        return pdfln
-
-    idx = pdfln >= -37
-    maxiter = int(1e4)
-    k = 0
-
-    if np.any(idx):
-        gcg = np.sum(np.square(np.linalg.solve(R.T, gam))) #Transpose R
-        pdfln -= 0.5 * gcg
-        xcg = np.dot(xm.T, np.linalg.solve(C, gam))
-        term = (0.5 * np.log(2) 
-                + np.log(xcg) #There might be a mistake in this line
-                - 0.5 * slog(v + rho.T))
-        
-        term[term == -np.inf] = np.log(np.finfo(float).tiny)
-        term[term == np.inf] = np.log(np.finfo(float).max)
-        
-        logterms = (gammaln((v + d + k) / 2) 
-                    - gammaln(vn2) 
-                    - gammaln(k + 1) 
-                    + k * term)
-        
-        ff = np.real(np.exp(logterms))
-        #ff=np.squeeze(ff)
-        logsumk = np.log(ff)
-        
-        while k < maxiter:
-            k += 1
-            logterms = (gammaln((v + d + k) / 2) 
-                        - gammaln(vn2) 
-                        - gammaln(k + 1) 
-                        + k * term[idx]) #Check on this condition
-            ff = np.real(np.exp(logterms - logsumk[idx]))
-            logsumk[idx] = logsumk[idx] + np.log1p(ff) #logsumk[idx] = np.logaddexp(logsumk[idx], np.log(ff)) #I changed this one too
-            idx[idx] = np.abs(ff[idx]) > 1e-4
-            if not np.any(idx):
-                break
-
-        pdfln = np.real(pdfln + logsumk.T)
-
-    return pdfln
-
-def slog(x):
-    realmin = np.finfo(float).tiny
-    realmax = np.finfo(float).max
-    x_clamped = np.clip(x,realmin,realmax)
-    return np.log(x_clamped)
-
-
-
-
-# Trash (but not quite)
-x1 = np.linspace(-5, 5, 100)
-x2 = np.linspace(-5, 5, 100)
-
-# Parameters for each plot
-v = 4
-Sigma_identity = np.eye(2)
-
-# First plot: mu = [0, 0], gam = [0, 0], Sigma = I2
-mu1 = np.zeros(2)
-gam1 = np.zeros(2)
-plot_mvnct_density(mu1, gam1, v, Sigma_identity, "MVNCT: v=4, γ=[0, 0], Σ=I2")
-
-# Second plot: mu = [0, 1], gam = [0, 1], Sigma = I2
-mu2 = np.array([0, 1])
-gam2 = np.array([0, 1])
-plot_mvnct_density(mu2, gam2, v, Sigma_identity, "MVNCT: v=4, γ=[0, 1], Σ=I2")
-
-# Third plot: mu = [0, 1], gam = [0, 1], R = 0.5
-R = np.array([[1, 0.5], [0.5, 1]])  # Correlation matrix
-plot_mvnct_density(mu2, gam2, v, R, "MVNCT: v=4, γ=[0, 1], R=0.5")
-
-
+# Plot the PDF as a contour plot for the second set of parameters
+plt.figure(figsize=(10, 8))
+contour2 = plt.contour(X1, X2, pdf_grid2, levels=20)  # 20 contour levels
+plt.colorbar(contour2, label='PDF')
+plt.title('PDF of Multivariate Noncentral t-Distribution (mu=[0,0], gam=[0,1], v=4, Sigma=[[1,0],[0,1]])')
+plt.xlabel('x1')
+plt.ylabel('x2')
+plt.xlim(x1.min(), x1.max())
+plt.ylim(x2.min(), x2.max())
+plt.gca().set_aspect('equal', adjustable='box')  # Ensure the aspect ratio is equal
+plt.show()
 
 #%% II.1
 
