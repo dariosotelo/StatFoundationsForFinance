@@ -1973,6 +1973,32 @@ q3part2(samples, initial_guess)
 
 #%% II.4
 
+# Reading the data.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
