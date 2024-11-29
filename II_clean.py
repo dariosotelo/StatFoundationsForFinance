@@ -94,6 +94,9 @@ plt.show()
 
 #%% II.2
 
+
+# Part a
+
 # Our definition of the bessel_k
 def bessel_k_int(nu, x):
     integrand = lambda u: 0.5*u**(nu-1)*np.exp(-x/2*(1/u+u))
@@ -127,9 +130,55 @@ x_values = list(range(-100, 20))
 graph_difference(nu, x, x_values)
 
 
+# Part b
+# MLE of the k=2 component, d=2 (bivariate) discrete mixture of Laplace.
+def compute_mle_bivariate_discrete_mixture_laplace():
+    result = minimize(fun = neg_log_bvlp, 
+                      x0, 
+                      method="L-BFGS-B")
 
 
+def bivariate_discrete_laplace_logpdf(mean, scale, x):
+    """
+    Log-probability density of the bivariate discrete Laplace distribution.
+    Args:
+        mean (tuple): (mu1, mu2), mean of the bivariate Laplace.
+        scale (tuple): (b1, b2), scale parameters.
+        x (array-like): Observed data points (n x 2 array).
+    Returns:
+        Log-probability density for each point in x.
+    """
+    mu1, mu2 = mean
+    b1, b2 = scale
+    x1, x2 = x[:, 0], x[:, 1]
+    return -np.abs(x1 - mu1) / b1 - np.abs(x2 - mu2) / b2 - np.log(2 * b1 * b2)
 
+# Negative log-likelihood for the k=2 mixture model
+def negative_log_likelihood_bvlp(params, x):
+    """
+    Negative log-likelihood for the k=2 component, d=2 discrete mixture of Laplace.
+    Args:
+        params: [w1, mu1_1, mu1_2, b1_1, b1_2, mu2_1, mu2_2, b2_1, b2_2]
+                where w1 is the weight of the first component, and the rest are
+                the parameters of the two components (means and scales).
+        x: Observed bivariate data points (n x 2 array).
+    Returns:
+        Negative log-likelihood of the mixture model.
+    """
+    w1 = params[0]
+    mu1 = (params[1], params[2])
+    b1 = (params[3], params[4])
+    mu2 = (params[5], params[6])
+    b2 = (params[7], params[8])
+    w2 = 1 - w1  # Enforce weight constraint
+
+    # Compute log-probabilities for each component
+    logpdf1 = bivariate_discrete_laplace_logpdf(mu1, b1, x)
+    logpdf2 = bivariate_discrete_laplace_logpdf(mu2, b2, x)
+
+    # Mixture log-likelihood
+    log_likelihood = np.log(w1 * np.exp(logpdf1) + w2 * np.exp(logpdf2))
+    return -np.sum(log_likelihood)  # Negative log-likelihood
 
 
 
