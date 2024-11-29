@@ -1565,7 +1565,6 @@ x = np.random.multivariate_normal(
     cov=[[1.0, 0.5], [0.5, 1.5]],
     size=200
 )
-x = 
 
 mle_params = compute_mle(x.T, x_0)
 print("sadsfljkajdsflkajdfs")
@@ -1747,8 +1746,130 @@ print(f" [{mle_params[3]:.4f}, {mle_params[4]:.4f}]]")
 
 # Program 2
 
-def compute_mle_p2(data_set, x_0):
-    result_mixture_laplace = minimize(fun = , x0)
-    
+import numpy as np
+from scipy.optimize import minimize
+from scipy.stats import laplace, nct
+from scipy.special import gammaln
+
+
+# Safe log to handle numerical issues
+def safe_log(x):
+    return np.log(np.maximum(x, np.finfo(float).eps))
+
+
+# Mixture Laplace Model
+def neg_log_likelihood_mixture_laplace(params, data):
+    pi, mu1_x, mu1_y, mu2_x, mu2_y, b1, b2 = params[:7]
+    pi = 1 / (1 + np.exp(-pi))  # Map pi to (0, 1) using sigmoid
+    mu1 = np.array([mu1_x, mu1_y])
+    mu2 = np.array([mu2_x, mu2_y])
+    b1, b2 = np.exp(b1), np.exp(b2)  # Ensure scales are positive
+
+    # Log-likelihood for each component
+    ll1 = laplace.logpdf(data, loc=mu1, scale=b1).sum(axis=1)
+    ll2 = laplace.logpdf(data, loc=mu2, scale=b2).sum(axis=1)
+
+    # Mixture log-likelihood
+    ll = safe_log(pi * np.exp(ll1) + (1 - pi) * np.exp(ll2))
+    return -np.sum(ll)
+
+
+# Bivariate NCT Model
+def neg_log_likelihood_bivariate_nct(params, data):
+    mu_x, mu_y, gam_x, gam_y, v, sigma_x, sigma_y, rho = params
+    mu = np.array([mu_x, mu_y])
+    gam = np.array([gam_x, gam_y])
+    v = np.exp(v)  # Ensure degrees of freedom are positive
+    Sigma = np.array([[sigma_x**2, rho * sigma_x * sigma_y],
+                      [rho * sigma_x * sigma_y, sigma_y**2]])
+
+    # Log-likelihood using the multivariate NCT
+    def mnvtcpdfln(x, mu, gam, v, Sigma):
+        d, t = x.shape
+        C = Sigma
+        R = np.linalg.cholesky(C).T
+        vn2 = (v + d) / 2
+        xm = x - mu.reshape(-1, 1)
+        rho = np.sum(np.linalg.solve(R.T, xm)**2, axis=0)
+        pdfln = (gammaln(vn2) 
+                 - (d / 2) * np.log(np.pi * v) 
+                 - np.sum(np.log(np.diag(R))) 
+                 - vn2 * safe_log(v + rho))
+        return pdfln.sum()
+
+    log_likelihood = mnvtcpdfln(data.T, mu, gam, v, Sigma)
+    return -log_likelihood
+
+
+# AIC and BIC Calculation
+def compute_aic_bic(log_likelihood, num_params, num_data):
+    aic = -2 * log_likelihood + 2 * num_params
+    bic = -2 * log_likelihood + num_params * np.log(num_data)
+    return aic, bic
+
+
+# MLE Computation Function
+def compute_mle(data, model, initial_guess):
+    # Choose the likelihood function
+    if model == 'mixture_laplace':
+        neg_log_likelihood = neg_log_likelihood_mixture_laplace
+    elif model == 'bivariate_nct':
+        neg_log_likelihood = neg_log_likelihood_bivariate_nct
+    else:
+        raise ValueError("Invalid model type.")
+
+    # Minimize the negative log-likelihood
+    result = minimize(
+        fun=neg_log_likelihood,
+        x0=initial_guess,
+        args=(data,),
+        method='L-BFGS-B',
+        options={'disp': True}
+    )
+
+    # Check for optimization success
+    if not result.success:
+        raise RuntimeError(f"Optimization failed: {result.message}")
+
+    # Return the estimated parameters and log-likelihood
+    return result.x, -result.fun
+
+
+# Main Program
+def main(data):
+    T, d = data.shape
+
+    # Initial guesses for both models
+    laplace_init = [0, 0, 0, 0, 0, 0, 0]  # pi, mu1_x, mu1_y, mu2_x, mu2_y, b1, b2
+    nct_init = [0, 0, 0, 0, np.log(5), 1, 1, 0]  # mu_x, mu_y, gam_x, gam_y, v, sigma_x, sigma_y, rho
+
+    # Fit Mixture Laplace
+    params_laplace, log_likelihood_laplace = compute_mle(data, 'mixture_laplace', laplace_init)
+    aic_laplace, bic_laplace = compute_aic_bic(log_likelihood_laplace, len(laplace_init), T)
+
+    # Fit Bivariate NCT
+    params_nct, log_likelihood_nct = compute_mle(data, 'bivariate_nct', nct_init)
+    aic_nct, bic_nct = compute_aic_bic(log_likelihood_nct, len(nct_init), T)
+
+    # Output Results
+    print("\nMixture Laplace Model:")
+    print(f"Parameters: {params_laplace}")
+    print(f"Log-Likelihood: {log_likelihood_laplace}")
+    print(f"AIC: {aic_laplace}, BIC: {bic_laplace}")
+
+    print("\nBivariate NCT Model:")
+    print(f"Parameters: {params_nct}")
+    print(f"Log-Likelihood: {log_likelihood_nct}")
+    print(f"AIC: {aic_nct}, BIC: {bic_nct}")
+
+
+# Example Usage
+if __name__ == "__main__":
+    # Generate example data (replace with real data)
+    np.random.seed(42)
+    data = np.random.rand(100, 2)  # T x 2 data
+
+    # Run the program
+    main(data)
 
 
