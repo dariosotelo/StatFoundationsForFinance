@@ -1411,8 +1411,8 @@ def MVNCT2estimation(x):
 
     Parameters
     ----------
-    x : ndarray of shape (T, 2)
-        Input data, where T is the number of observations.
+    x : ndarray of shape (1000, 2)
+        Input data where rows represent samples and columns represent dimensions.
 
     Returns
     -------
@@ -1428,13 +1428,13 @@ def MVNCT2estimation(x):
         Variance-covariance matrix of the estimated parameters.
     """
     x = np.asarray(x)
-    T, d = x.shape  # Now the data is (T, 2) instead of (2, T)
+    T, d = x.shape  # Extract new shape (1000, 2)
     if d != 2:
         x = x.T
         T, d = x.shape
         #raise ValueError('Not implemented for dimensions other than 2.')
 
-    # Transpose the data for compatibility with the rest of the code
+    # Transpose the data to match the original shape (2, T)
     x = x.T  # Now x is 2 x T
 
     # Define bounds and initial parameters
@@ -1481,59 +1481,53 @@ def MVNCT2estimation(x):
 
 
 
+# Parameters for the distribution
+mu = np.array([0, 0])           # Location vector
+gam = np.array([0, 2.5])          # Noncentrality vector
+v = 4                           # Degrees of freedom
+Sigma = np.array([[1, 0.5],
+                  [0.5, 1]])     # Covariance matrix
+n_samples = 500              # Number of samples
 
+x_min, x_max = -15, 15  # Range for both dimensions
+y_min, y_max = -15, 15
 
-# # Parameters for the distribution
-# mu = np.array([0, 0])           # Location vector
-# gam = np.array([0, 2.5])          # Noncentrality vector
-# v = 4                           # Degrees of freedom
-# Sigma = np.array([[1, 0.5],
-#                   [0.5, 1]])     # Covariance matrix
-# n_samples = 500              # Number of samples
+# Precompute the maximum PDF value (optional for efficiency)
+x_test = np.linspace(x_min, x_max, 100)
+y_test = np.linspace(y_min, y_max, 100)
+X_test, Y_test = np.meshgrid(x_test, y_test)
+test_points = np.vstack([X_test.ravel(), Y_test.ravel()])
+log_pdf_test = mvnctpdfln(test_points, mu, gam, v, Sigma)
+pdf_test = np.exp(log_pdf_test)
+pdf_max = np.max(pdf_test)  # Maximum value of the PDF
 
-# x_min, x_max = -15, 15  # Range for both dimensions
-# y_min, y_max = -15, 15
+# Initialize storage for samples
+samples = np.zeros((n_samples, 2))
+count = 0
 
-# # Precompute the maximum PDF value (optional for efficiency)
-# x_test = np.linspace(x_min, x_max, 100)
-# y_test = np.linspace(y_min, y_max, 100)
-# X_test, Y_test = np.meshgrid(x_test, y_test)
-# test_points = np.vstack([X_test.ravel(), Y_test.ravel()])
-# log_pdf_test = mvnctpdfln(test_points, mu, gam, v, Sigma)
-# pdf_test = np.exp(log_pdf_test)
-# pdf_max = np.max(pdf_test)  # Maximum value of the PDF
+# Rejection sampling loop
+while count < n_samples:
+    # Step 1: Generate a random point in the sampling space
+    x_rand = x_min + (x_max - x_min) * np.random.rand()
+    y_rand = y_min + (y_max - y_min) * np.random.rand()
+    candidate = np.array([x_rand, y_rand])
 
-# # Initialize storage for samples
-# samples = np.zeros((2, n_samples))
-# count = 0
+    # Step 2: Evaluate the PDF at the candidate point
+    log_pdf_val = mvnctpdfln(candidate.reshape(2, 1), mu, gam, v, Sigma)
+    pdf_val = np.exp(log_pdf_val)[0]  # Since mvnctpdfln returns an array
 
-# # Rejection sampling loop
-# while count < (n_samples):
-#     # Step 1: Generate a random point in the sampling space
-#     x_rand = x_min + (x_max - x_min) * np.random.rand()
-#     y_rand = y_min + (y_max - y_min) * np.random.rand()
-#     candidate = np.array([x_rand, y_rand])
+    # Step 3: Generate a uniform random number and accept/reject
+    u = np.random.rand() * pdf_max  # Scale uniform random number by maximum PDF value
+    if u <= pdf_val:
+        samples[count, :] = candidate
+        count += 1
 
-#     # Step 2: Evaluate the PDF at the candidate point
-#     log_pdf_val = mvnctpdfln(candidate.reshape(2, 1), mu, gam, v, Sigma)
-#     pdf_val = np.exp(log_pdf_val)[0]  # Since mvnctpdfln returns an array
-
-#     # Step 3: Generate a uniform random number and accept/reject
-#     u = np.random.rand() * pdf_max  # Scale uniform random number by maximum PDF value
-#     if u <= pdf_val:
-#         samples[:, count] = candidate
-#         count += 1
-
-# print(samples)
-
-# actual = [v, mu[0], mu[1], Sigma[0][0], Sigma[1][1], Sigma[0][1], gam[0], gam[1]]
-#print('Actual Parameters:')
-# print(actual)
-
-# Generate random 2 by 1000 data points
-np.random.seed(42)
-samples = np.random.randn(1000, 2)
 print(samples)
+
+# # Generate random 2 by 1000 data points
+# np.random.seed(42)
+# samples = np.random.randn(1000, 2)
+# print(samples)
 
 # Assuming you have already implemented the mvnctpdfln and MVNCT2estimation functions
 param, stderr, iters, loglik, Varcov = MVNCT2estimation(samples)
@@ -1541,6 +1535,7 @@ print('Estimated Parameters:')
 print(param)
 print('Standard Errors:')
 print(stderr)
+print(-loglik)
 
 # Compute AIC and BIC for the MLE parameters
 def compute_aic_bic(log_likelihood, num_params, num_data):
