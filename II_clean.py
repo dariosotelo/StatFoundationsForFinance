@@ -291,32 +291,26 @@ params = np.array([
 T = 1000
 data = generate_bivariate_discrete_laplace_with_sigma_param(T, params)
 
-params1 = compute_mle_bivariate_discrete_mixture_laplace(data)
+mle_params = compute_mle_bivariate_discrete_mixture_laplace(data)
 
-def print_mle_results(params):
-    # Extract parameters
-    loc1 = mle_params[:2]  # Location vector for component 1
-    loc2 = mle_params[2:4]  # Location vector for component 2
-    scale1, scale2 = mle_params[4:6]  # Scale parameters
-    Sigma1 = np.array([[mle_params[6], mle_params[7]], [mle_params[7], mle_params[8]]])  # Covariance matrix for component 1
-    Sigma2 = np.array([[mle_params[9], mle_params[10]], [mle_params[10], mle_params[11]]])  # Covariance matrix for component 2
-    weight1 = mle_params[12]  # Mixture weight for component 1
-    weight2 = 1 - weight1  # Mixture weight for component 2
+loc1 = mle_params[:2]  # Location vector for component 1
+loc2 = mle_params[2:4]  # Location vector for component 2
+scale1, scale2 = mle_params[4:6]  # Scale parameters
+Sigma1 = np.array([[mle_params[6], mle_params[7]], [mle_params[7], mle_params[8]]])  # Covariance matrix for component 1
+Sigma2 = np.array([[mle_params[9], mle_params[10]], [mle_params[10], mle_params[11]]])  # Covariance matrix for component 2
+weight1 = mle_params[12]  # Mixture weight for component 1
+weight2 = 1 - weight1  # Mixture weight for component 2
 
-    # Print results
-    print("Maximum Likelihood Estimates (MLE):\n")
-    print(f"Location for Component 1: {loc1}")
-    print(f"Location for Component 2: {loc2}")
-    print(f"Scale for Component 1: {scale1:.4f}")
-    print(f"Scale for Component 2: {scale2:.4f}")
-    print(f"Covariance Matrix for Component 1:\n{Sigma1}")
-    print(f"Covariance Matrix for Component 2:\n{Sigma2}")
-    print(f"Weight for Component 1: {weight1:.4f}")
-    print(f"Weight for Component 2: {weight2:.4f}")
-
-# Print the results
-print_mle_results(params1)
-
+# Print results
+print("Maximum Likelihood Estimates (MLE):\n")
+print(f"Location for Component 1: {loc1}")
+print(f"Location for Component 2: {loc2}")
+print(f"Scale for Component 1: {scale1:.4f}")
+print(f"Scale for Component 2: {scale2:.4f}")
+print(f"Covariance Matrix for Component 1:\n{Sigma1}")
+print(f"Covariance Matrix for Component 2:\n{Sigma2}")
+print(f"Weight for Component 1: {weight1:.4f}")
+print(f"Weight for Component 2: {weight2:.4f}")
 
 
 

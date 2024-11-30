@@ -1,281 +1,3 @@
-# #!/usr/bin/env python3
-# # -*- coding: utf-8 -*-
-# """
-# Created on Mon Nov 11 18:58:34 2024
-
-# """
-
-# #%% Libraries
-# from scipy.special import betainc
-# import numpy as np
-# from scipy.optimize import fsolve
-# from scipy.integrate import quad
-
-# #%% Preparation functions
-
-# #PDF
-# def f_GAt(z, d, nu, theta, K):
-#     if any(param <= 0 for param in [d, nu, theta]):
-#         return "d, nu, or theta must be positive."
-#     if z < 0:
-#         return K * (1 + (-z * theta) ** d / nu) ** -(nu + 1/d)
-#     else:
-#         return K * (1 + (z / theta) ** d / nu) ** -(nu + 1/d)
-
-# #Auxiliary function for the ES function
-# def calculate_L(c, nu, theta, d):
-#     return nu / (nu + (-c * theta) ** d)
-
-# #ES
-# def S_r(c, r, d, nu, theta):
-#     if c >= 0:
-#         return "c must be negative."
-#     L = calculate_L(c, nu, theta, d)
-#     B_L_num = betainc(nu - r / d, (r + 1) / d, L)  
-#     B_L_den = betainc(nu, 1 / d, L)                
-#     return ((-1) ** r) * (nu ** (r / d)) * ((1 + theta ** 2) / (theta ** r + theta ** (r + 2))) * (B_L_num / B_L_den)
-
-# #The ES would be calculated using VaR as c and r=1
-
-# #CDF
-# def GAt(z, d, nu, theta, K=1):
-#     pdf = f_GAt(z, d, nu, theta, K)
-#     #Underscore because quad returns the error as the second parameter
-#     cdf, _ = quad(lambda t: f_GAt(t, d, nu, theta, K), -np.inf, z)
-#     return pdf, cdf
-
-
-# #%% I.1
-
-# # Paolella's code suggestion (it is a kinda revised copy-paste from ChatGPT)
-
-# def GAtsim(sim, d, v, theta):
-#     """
-#     Simulates data from the GAt distribution.
-    
-#     Parameters:
-#     sim (int): Number of simulations.
-#     d (float): Parameter d of the GAt distribution.
-#     v (float): Parameter v of the GAt distribution.
-#     theta (float): Parameter theta of the GAt distribution.
-    
-#     Returns:
-#     np.ndarray: Simulated data from the GAt distribution.
-#     """
-#     x = np.zeros(sim)
-#     lo = 1e-6
-#     hi = 1 - lo
-    
-#     for i in range(sim):
-#         u = np.random.rand()
-#         u = max(u, lo)
-#         u = min(u, hi)
-#         x[i] = GAtquantile(u, d, v, theta)
-        
-#     return x
-
-# def GAtquantile(p, d, v, theta):
-#     """
-#     Computes the quantile of the GAt distribution for a given probability p.
-    
-#     Parameters:
-#     p (float): Probability (0 < p < 1).
-#     d (float): Parameter d of the GAt distribution.
-#     v (float): Parameter v of the GAt distribution.
-#     theta (float): Parameter theta of the GAt distribution.
-    
-#     Returns:
-#     float: Quantile corresponding to the probability p.
-#     """
-#     # Find lower bound for the quantile
-#     lobound = 0
-#     while ff(lobound, p, d, v, theta) >= 0:
-#         lobound -= 4
-    
-#     # Find upper bound for the quantile
-#     hibound = 0
-#     while ff(hibound, p, d, v, theta) <= 0:
-#         hibound += 4
-    
-#     # Use fsolve to find the root of the function, i.e., the quantile
-#     tol = 1e-5
-#     q = fsolve(lambda x: ff(x, p, d, v, theta), [lobound, hibound], xtol=tol)[0]
-    
-#     return q
-
-
-
-
-
-# def ff(x, p, d, v, theta, K=1):
-#     """
-#     Helper function to compute the difference between the CDF at x and the probability p.
-    
-#     Parameters:
-#     x (float or array-like): Point at which to evaluate the CDF.
-#     p (float): Target probability.
-#     d (float): Shape parameter.
-#     v (float): Shape parameter.
-#     theta (float): Skew parameter.
-    
-#     Returns:
-#     float: Difference between CDF(x) and p.
-#     """
-#     # If x is an array, extract the scalar value (fsolve may pass a one-element array)
-#     if isinstance(x, np.ndarray):
-#         x = x[0]
-        
-#     # Calculate the PDF and CDF at x
-#     _, cdf = GAt(x, d, v, theta, K)
-    
-#     # Return the difference between CDF and p
-#     return cdf - p
-
-
-# #Something is not working but it is related to the array the GAtsim function returns which is then used in ff
-# #I was thinking on doing a for loop but i havent revised Paolellas code in detail.
-
-
-# # Set parameters
-# sim = 5000
-# d = 2.0
-# v = 1.5
-# theta = 0.9
-
-# # Simulate data
-# simulated_data = GAtsim(sim, d, v, theta)
-
-
-# #%% Second request to ChatGPT, this one worked.
-
-
-# import numpy as np
-# from scipy.optimize import fsolve
-
-# def GAtsim(sim, d, v, theta):
-#     """
-#     Simulates data from the GAt distribution.
-    
-#     Parameters:
-#     sim (int): Number of simulations.
-#     d (float): Parameter d of the GAt distribution.
-#     v (float): Parameter v of the GAt distribution.
-#     theta (float): Parameter theta of the GAt distribution.
-    
-#     Returns:
-#     np.ndarray: Simulated data from the GAt distribution.
-#     """
-#     x = np.zeros(sim)
-#     lo = 1e-6
-#     hi = 1 - lo
-    
-#     for i in range(sim):
-#         u = np.random.rand()
-#         u = max(u, lo)
-#         u = min(u, hi)
-#         x[i] = GAtquantile(u, d, v, theta)
-        
-#     return x
-
-# def GAtquantile(p, d, v, theta):
-#     """
-#     Computes the quantile of the GAt distribution for a given probability p.
-    
-#     Parameters:
-#     p (float): Probability (0 < p < 1).
-#     d (float): Parameter d of the GAt distribution.
-#     v (float): Parameter v of the GAt distribution.
-#     theta (float): Parameter theta of the GAt distribution.
-    
-#     Returns:
-#     float: Quantile corresponding to the probability p.
-#     """
-#     # Find lower bound for the quantile
-#     lobound = 0
-#     while ff(lobound, p, d, v, theta) >= 0:
-#         lobound -= 4
-    
-#     # Find upper bound for the quantile
-#     hibound = 0
-#     while ff(hibound, p, d, v, theta) <= 0:
-#         hibound += 4
-    
-#     # Use fsolve to find the root of the function, i.e., the quantile
-#     tol = 1e-5
-#     q = fsolve(lambda x: ff(x, p, d, v, theta), x0=(lobound + hibound) / 2, xtol=tol)[0]
-    
-#     return q
-
-# def ff(x, p, d, v, theta):
-#     """
-#     Helper function to compute the difference between the CDF at x and the probability p.
-    
-#     Parameters:
-#     x (float): Point at which to evaluate the CDF.
-#     p (float): Target probability.
-#     d (float): Parameter d of the GAt distribution.
-#     v (float): Parameter v of the GAt distribution.
-#     theta (float): Parameter theta of the GAt distribution.
-    
-#     Returns:
-#     float: Difference between CDF(x) and p.
-#     """
-#     _, cdf = GAt(x, d, v, theta)
-#     return cdf - p
-
-# def GAt(z, d, v, theta, K=1):
-#     """
-#     Computes the PDF and approximates the CDF of the GAt distribution.
-    
-#     Parameters:
-#     z (float): Point at which to evaluate the PDF and CDF.
-#     d (float): Shape parameter.
-#     v (float): Shape parameter.
-#     theta (float): Skew parameter.
-#     K (float): Normalizing constant, if known.
-    
-#     Returns:
-#     tuple: (pdf, cdf) values at point z.
-#     """
-#     # Calculate PDF using the GAt distribution formula
-#     pdf = f_GAt(z, d, v, theta, K)
-    
-#     # Approximate CDF by integrating the PDF from -∞ to z
-#     from scipy.integrate import quad
-#     cdf, _ = quad(lambda t: f_GAt(t, d, v, theta, K), -np.inf, z)
-    
-#     return pdf, cdf
-
-# def f_GAt(z, d, nu, theta, K=1):
-#     """
-#     PDF of the GAt distribution.
-    
-#     Parameters:
-#     z (float): Point at which to evaluate the PDF.
-#     d (float): Shape parameter.
-#     nu (float): Shape parameter.
-#     theta (float): Skew parameter.
-#     K (float): Normalizing constant, if known.
-    
-#     Returns:
-#     float: PDF value at z.
-#     """
-#     if any(param <= 0 for param in [d, nu, theta]):
-#         raise ValueError("d, nu, or theta must be positive.")
-    
-#     if z < 0:
-#         return K * (1 + (-z * theta) ** d / nu) ** -(nu + 1 / d)
-#     else:
-#         return K * (1 + (z / theta) ** d / nu) ** -(nu + 1 / d)
-
-
-# sim = 5000
-# d = 2.0
-# v = 1.5
-# theta = 0.9
-
-# simulated_data = GAtsim(sim, d, v, theta)
-
 
 # %% Part 1
 from scipy.stats import norm, t, gaussian_kde, levy_stable
@@ -1096,9 +818,15 @@ plt.gca().set_aspect('equal', adjustable='box')  # Ensure the aspect ratio is eq
 plt.show()
 
 #%% II.1
-
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm  # For colormap
+from scipy.integrate import quad
+import scipy.special as sp
+from scipy.optimize import minimize
+from scipy.special import gammaln, gamma, kv
+from scipy.linalg import cholesky
 
 def bivariate_laplace(mu, b, n):
     """
@@ -1172,6 +900,90 @@ ax.set_ylabel("X2")
 ax.set_zlabel("Density")
 plt.show()
 
+# 2D Histogram (binning the data)
+bins = 20  # Number of bins in each dimension
+hist, xedges, yedges = np.histogram2d(samples[:, 0], samples[:, 1], bins=bins)
+
+# Coordinates of bin centers
+xpos, ypos = np.meshgrid(xedges[:-1] + np.diff(xedges) / 2, yedges[:-1] + np.diff(yedges) / 2, indexing="ij")
+xpos = xpos.ravel()
+ypos = ypos.ravel()
+zpos = np.zeros_like(xpos)
+
+# Heights of the bars (histogram counts)
+heights = hist.ravel()
+
+# Dimensions of the bars
+dx = dy = np.diff(xedges)[0]  # Width of each bin
+dz = heights  # Heights of the bars
+
+# Normalize heights for colormap
+norm = plt.Normalize(vmin=heights.min(), vmax=heights.max())
+colors = cm.viridis(norm(heights))  # Use the "viridis" colormap
+
+# Create the 3D bar plot
+fig = plt.figure(figsize=(10, 7))
+ax = fig.add_subplot(111, projection='3d')
+
+ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=colors, alpha=0.7)
+
+# Set labels and title
+ax.set_title("3D Bar Plot of 2-Component Bivariate Mixture of Laplace")
+ax.set_xlabel("X1")
+ax.set_ylabel("X2")
+ax.set_zlabel("Frequency")
+
+# Add a colorbar for density
+sm = cm.ScalarMappable(cmap=cm.viridis, norm=norm)
+sm.set_array([])  # Dummy array for the colorbar
+plt.colorbar(sm, ax=ax, shrink=0.5, aspect=10, label="Density")
+
+plt.show()
+# Perform kernel density estimation
+kde = gaussian_kde(samples.T)
+
+# Create a grid of points in 2D space
+x1 = np.linspace(samples[:, 0].min(), samples[:, 0].max(), 100)
+x2 = np.linspace(samples[:, 1].min(), samples[:, 1].max(), 100)
+X1, X2 = np.meshgrid(x1, x2)
+positions = np.vstack([X1.ravel(), X2.ravel()])
+
+# Evaluate the density on the grid
+density = kde(positions).reshape(X1.shape)
+
+# Plot the density as a 3D surface plot
+fig = plt.figure(figsize=(10, 7))
+ax = fig.add_subplot(111, projection='3d')
+ax.plot_surface(X1, X2, density, cmap='viridis', edgecolor='none')
+ax.set_title("3D Density Plot of 2-Component Bivariate Mixture of Laplace")
+ax.set_xlabel("X1")
+ax.set_ylabel("X2")
+ax.set_zlabel("Density")
+plt.show()
+# CDF Plot for the Mixture of Bivariate Laplace and Bivariate Noncentral t-Distribution
+
+# Define a function to compute the CDF from the PDF
+def compute_cdf(pdf, x1, x2):
+    cdf = np.zeros_like(pdf)
+    for i in range(pdf.shape[0]):
+        for j in range(pdf.shape[1]):
+            cdf[i, j] = np.sum(pdf[:i+1, :j+1])
+    cdf /= cdf[-1, -1]  # Normalize to ensure the CDF ranges from 0 to 1
+    return cdf
+
+# Compute the CDF for the mixture of bivariate Laplace
+cdf_mixture_laplace = compute_cdf(pdf_grid, x1, x2)
+
+# Plot the CDF as a 3D surface plot
+fig = plt.figure(figsize=(10, 7))
+ax = fig.add_subplot(111, projection='3d')
+ax.plot_surface(X1, X2, cdf_mixture_laplace, cmap='viridis', edgecolor='none')
+ax.set_title("3D CDF Plot of 2-Component Bivariate Mixture of Laplace")
+ax.set_xlabel("X1")
+ax.set_ylabel("X2")
+ax.set_zlabel("CDF")
+plt.show()
+
 #%% II.2
 
 # a)
@@ -1182,19 +994,16 @@ def bessel_k_int(nu, x):
     result, _ = quad(integrand, 0, np.inf)
     return result
 
-# sp.kv
-
-# Test
-nu = 1.5
-x = 2.0
-sp_result = sp.kv(nu, x)
-our_result = bessel_k_int(nu, x)
+# # Test
+# nu = 1.5
+# x = 2.0
+# sp_result = sp.kv(nu, x)
+# our_result = bessel_k_int(nu, x)
 
 def graph_difference(nu, x_values):
     y_values = [abs(bessel_k_int(nu, x_val) - sp.kv(nu, x_val)) for x_val in x_values]
-
     plt.figure(figsize=(10, 6))
-    plt.plot(x_values, y_values, marker='o', linestyle='-', color='blue', label='Difference')
+    plt.plot(x_values, y_values, linestyle='-', color='blue', label='Difference')
     plt.title('Difference between bessel_k_int and scipy bessel_k')
     plt.xlabel('x values')
     plt.ylabel('Absolute Difference')
@@ -1204,7 +1013,7 @@ def graph_difference(nu, x_values):
 
 
 # You can change the range, after 20 the difference is minimal
-x_values = list(range(0, 20))
+x_values = np.linspace(0, 20, 200)
     
 graph_difference(1.2, x_values)
     
@@ -1414,96 +1223,340 @@ print(f"b2 difference: {np.abs(np.array(b2_true) - estimated_params[7:9])}")
 
 #%% II.3
 
-
-# Im not using this one afaik
-def negative_log_likelihood(params, x):
-    """
-    Negative log-likelihood for the bivariate NCT distribution.
+# # Im not using this one afaik
+# def negative_log_likelihood(params, x):
+#     """
+#     Negative log-likelihood for the bivariate NCT distribution.
     
-    Parameters:
-    params : ndarray
-        Parameter vector: [mu1, mu2, gam1, gam2, v, Sigma_11, Sigma_12, Sigma_22].
-    x : ndarray
-        T x 2 dataset (bivariate observations).
+#     Parameters:
+#     params : ndarray
+#         Parameter vector: [mu1, mu2, gam1, gam2, v, Sigma_11, Sigma_12, Sigma_22].
+#     x : ndarray
+#         T x 2 dataset (bivariate observations).
         
-    Returns:
-    float
-        Negative log-likelihood value.
+#     Returns:
+#     float
+#         Negative log-likelihood value.
+#     """
+#     # Extract parameters
+#     mu = np.array([params[0], params[1]])  # Location vector
+#     gam = np.array([params[2], params[3]])  # Noncentrality vector
+#     v = params[4]  # Degrees of freedom
+#     Sigma = np.array([
+#         [params[5], params[6]],  # Covariance matrix
+#         [params[6], params[7]]
+#     ])
+
+#     """  linear algebra requirements check, there might be something wrong w this  
+#     if not np.all(np.isfinite(Sigma)):
+#         print("Invalid Sigma (contains NaNs or infs):", Sigma)
+#         return np.inf  # Penalize invalid Sigma
+
+#     # Ensure Sigma is positive definite
+#     if np.any(np.linalg.eigvals(Sigma) <= 0):
+#         print("Non-positive definite Sigma:", Sigma)
+#         return np.inf
+    
+
+#      """   
+#     # Call the provided log-density function
+    
+#     try:
+#         log_pdf = mvnctpdfln(x, mu, gam, v, Sigma)
+#     except ValueError as e:
+#         # Handle any errors (e.g., non-positive-definite Sigma)
+#         return np.inf
+    
+#     # Return the negative log-likelihood
+#     return -np.sum(log_pdf)
+
+
+# def compute_mle(data_set, x_0):
+    
+#     # Minimize the negative log-likelihood
+#     result = minimize(
+#         fun=negative_log_likelihood,
+#         x0=x_0,
+#         args=(data_set,),
+#         method='L-BFGS-B',
+#         options={'disp': False}  # Display optimization details
+#     )
+    
+#     # Check for successful optimization
+#     if not result.success:
+#         raise RuntimeError(f"Optimization failed: {result.message}")
+    
+#     # Return the estimated parameters
+#     return result.x
+
+# x_0 = [
+#     0.0, 0.0,  # mu1, mu2
+#     0.0, 0.0,  # gam1, gam2
+#     5.0,        # v (degrees of freedom)
+#     1.0, 0.0, 1.0  # Sigma_11, Sigma_12, Sigma_22
+# ]
+
+# np.random.seed(42)
+# x = np.random.multivariate_normal(
+#     mean=[1.0, 2.0],
+#     cov=[[1.0, 0.5], [0.5, 1.5]],
+#     size=200
+# )
+
+# mle_params = compute_mle(x.T, x_0)
+# print("sadsfljkajdsflkajdfs")
+# print("Estimated Parameters:", mle_params)
+import numpy as np
+from scipy.optimize import minimize
+from scipy.linalg import inv, eigvals
+from scipy.stats import chi2
+from scipy.linalg import cholesky
+from tqdm import tqdm
+
+def transform_param_bounded_to_unbounded(param_bounded, bound):
     """
-    # Extract parameters
-    mu = np.array([params[0], params[1]])  # Location vector
-    gam = np.array([params[2], params[3]])  # Noncentrality vector
-    v = params[4]  # Degrees of freedom
-    Sigma = np.array([
-        [params[5], params[6]],  # Covariance matrix
-        [params[6], params[7]]
-    ])
+    Transforms parameters from bounded space to unbounded space for optimization.
+    """
+    param_unbounded = np.copy(param_bounded)
+    for i in range(len(param_bounded)):
+        if bound['which'][i]:
+            lo = bound['lo'][i]
+            hi = bound['hi'][i]
+            p = param_bounded[i]
+            # Apply logit transformation
+            p_std = (p - lo) / (hi - lo)
+            p_std = np.clip(p_std, 1e-8, 1 - 1e-8)  # Avoid division by zero or log(0)
+            param_unbounded[i] = np.log(p_std / (1 - p_std))
+        else:
+            # Unbounded parameter
+            param_unbounded[i] = param_bounded[i]
+    return param_unbounded
 
-    """  linear algebra requirements check, there might be something wrong w this  
-    if not np.all(np.isfinite(Sigma)):
-        print("Invalid Sigma (contains NaNs or infs):", Sigma)
-        return np.inf  # Penalize invalid Sigma
+def transform_param_unbounded_to_bounded(param_unbounded, bound):
+    """
+    Transforms parameters from unbounded space back to bounded space after optimization.
+    """
+    param_bounded = np.copy(param_unbounded)
+    for i in range(len(param_unbounded)):
+        if bound['which'][i]:
+            lo = bound['lo'][i]
+            hi = bound['hi'][i]
+            u = param_unbounded[i]
+            # Apply inverse logit transformation
+            exp_u = np.exp(u)
+            p_std = exp_u / (1 + exp_u)
+            param_bounded[i] = lo + p_std * (hi - lo)
+        else:
+            # Unbounded parameter
+            param_bounded[i] = param_unbounded[i]
+    return param_bounded
 
-    # Ensure Sigma is positive definite
-    if np.any(np.linalg.eigvals(Sigma) <= 0):
-        print("Non-positive definite Sigma:", Sigma)
-        return np.inf
-    
+def compute_jacobian(param_unbounded, bound):
+    """
+    Computes the Jacobian matrix of the transformation from unbounded to bounded parameters.
+    """
+    n_params = len(param_unbounded)
+    jacobian = np.eye(n_params)
+    for i in range(n_params):
+        if bound['which'][i]:
+            lo = bound['lo'][i]
+            hi = bound['hi'][i]
+            u = param_unbounded[i]
+            # Derivative of the inverse logit transformation
+            exp_u = np.exp(u)
+            denom = (1 + exp_u)**2
+            jacobian[i, i] = (hi - lo) * exp_u / denom
+        else:
+            # Unbounded parameter
+            jacobian[i, i] = 1
+    return jacobian
 
-     """   
-    # Call the provided log-density function
+def MVNCTloglik(param_unbounded, x, bound):
+    """
+    Computes the negative log-likelihood for optimization.
+    """
+    # Transform parameters to bounded space
+    param = transform_param_unbounded_to_bounded(param_unbounded, bound)
     
+    k = param[0]
+    mu = param[1:3]
+    scale = param[3:5]
+    R12 = param[5]
+    gam = param[6:8]
     
+    # Construct correlation matrix R
+    R = np.array([[1, R12], [R12, 1]])
+    # Check if R is positive definite
+    if np.min(eigvals(R)) < 1e-4:
+        return 1e5  # Large penalty for invalid R
+    
+    # Standardize input data
+    xx = (x - mu[:, np.newaxis]) / scale[:, np.newaxis]
+    
+    # Compute log-likelihood vector
     try:
-        log_pdf = mvnctpdfln(x, mu, gam, v, Sigma)
-    except ValueError as e:
-        # Handle any errors (e.g., non-positive-definite Sigma)
-        return np.inf
+        llvec = mvnctpdfln(xx, mu, gam, k, R) - np.log(np.prod(scale))
+        ll = -np.mean(llvec)
+    except Exception:
+        ll = 1e5  # Large penalty for numerical errors
+        return ll
     
-    # Return the negative log-likelihood
-    return -np.sum(log_pdf)
+    if np.isinf(ll) or np.isnan(ll):
+        ll = 1e5  # Penalty for infinite or NaN log-likelihood
+    return ll
 
+def MVNCT2estimation(x):
+    """
+    Estimates the parameters of a bivariate noncentral t-distribution.
 
-def compute_mle(data_set, x_0):
-    
-    # Minimize the negative log-likelihood
+    Parameters
+    ----------
+    x : ndarray of shape (T, 2)
+        Input data, where T is the number of observations.
+
+    Returns
+    -------
+    param : ndarray
+        Estimated parameters.
+    stderr : ndarray
+        Standard errors of the estimated parameters.
+    iters : int
+        Number of iterations performed by the optimizer.
+    loglik : float
+        Log-likelihood of the estimated model.
+    Varcov : ndarray
+        Variance-covariance matrix of the estimated parameters.
+    """
+    x = np.asarray(x)
+    T, d = x.shape  # Now the data is (T, 2) instead of (2, T)
+    if d != 2:
+        raise ValueError('Not implemented for dimensions other than 2.')
+
+    # Transpose the data for compatibility with the rest of the code
+    x = x.T  # Now x is 2 x T
+
+    # Define bounds and initial parameters
+    bound = {
+        'lo': np.array([1.1, -1, -1, 0.01, 0.01, -1, -4, -4]),
+        'hi': np.array([20, 1, 1, 100, 100, 1, 4, 4]),
+        'which': np.array([1, 0, 0, 1, 1, 1, 1, 1], dtype=bool)
+    }
+    initvec = np.array([3, 0, 0, 0.5, 0.5, 0, 0, 0])
+
+    # Transform initial parameters to unbounded space
+    initvec_unbounded = transform_param_bounded_to_unbounded(initvec, bound)
+
+    # Optimization parameters
+    maxiter = 300
+    tol = 1e-6
+
+    # Optimization using minimize
     result = minimize(
-        fun=negative_log_likelihood,
-        x0=x_0,
-        args=(data_set,),
-        method='L-BFGS-B',
-        options={'disp': False}  # Display optimization details
+        fun=MVNCTloglik,
+        x0=initvec_unbounded,
+        args=(x, bound),
+        method='BFGS',
+        options={'disp': True, 'maxiter': maxiter, 'gtol': tol}
     )
-    
-    # Check for successful optimization
-    if not result.success:
-        raise RuntimeError(f"Optimization failed: {result.message}")
-    
-    # Return the estimated parameters
-    return result.x
+
+    pout_unbounded = result.x
+    fval = result.fun
+    hess_inv = result.hess_inv  # Approximate inverse Hessian
+    iters = result.nit  # Number of iterations
+
+    # Transform parameters back to bounded space
+    param = transform_param_unbounded_to_bounded(pout_unbounded, bound)
+
+    # Compute variance-covariance matrix
+    # Adjust the covariance matrix due to parameter transformations
+    jacobian = compute_jacobian(pout_unbounded, bound)
+    Varcov_unbounded = hess_inv / T
+    Varcov = jacobian @ Varcov_unbounded @ jacobian.T
+
+    stderr = np.sqrt(np.diag(Varcov))
+    loglik = -fval * T
+    return param, stderr, iters, loglik, Varcov
 
 
 
 
-x_0 = [
-    0.0, 0.0,  # mu1, mu2
-    0.0, 0.0,  # gam1, gam2
-    5.0,        # v (degrees of freedom)
-    1.0, 0.0, 1.0  # Sigma_11, Sigma_12, Sigma_22
-]
 
+# # Parameters for the distribution
+# mu = np.array([0, 0])           # Location vector
+# gam = np.array([0, 2.5])          # Noncentrality vector
+# v = 4                           # Degrees of freedom
+# Sigma = np.array([[1, 0.5],
+#                   [0.5, 1]])     # Covariance matrix
+# n_samples = 500              # Number of samples
+
+# x_min, x_max = -15, 15  # Range for both dimensions
+# y_min, y_max = -15, 15
+
+# # Precompute the maximum PDF value (optional for efficiency)
+# x_test = np.linspace(x_min, x_max, 100)
+# y_test = np.linspace(y_min, y_max, 100)
+# X_test, Y_test = np.meshgrid(x_test, y_test)
+# test_points = np.vstack([X_test.ravel(), Y_test.ravel()])
+# log_pdf_test = mvnctpdfln(test_points, mu, gam, v, Sigma)
+# pdf_test = np.exp(log_pdf_test)
+# pdf_max = np.max(pdf_test)  # Maximum value of the PDF
+
+# # Initialize storage for samples
+# samples = np.zeros((2, n_samples))
+# count = 0
+
+# # Rejection sampling loop
+# while count < (n_samples):
+#     # Step 1: Generate a random point in the sampling space
+#     x_rand = x_min + (x_max - x_min) * np.random.rand()
+#     y_rand = y_min + (y_max - y_min) * np.random.rand()
+#     candidate = np.array([x_rand, y_rand])
+
+#     # Step 2: Evaluate the PDF at the candidate point
+#     log_pdf_val = mvnctpdfln(candidate.reshape(2, 1), mu, gam, v, Sigma)
+#     pdf_val = np.exp(log_pdf_val)[0]  # Since mvnctpdfln returns an array
+
+#     # Step 3: Generate a uniform random number and accept/reject
+#     u = np.random.rand() * pdf_max  # Scale uniform random number by maximum PDF value
+#     if u <= pdf_val:
+#         samples[:, count] = candidate
+#         count += 1
+
+# print(samples)
+
+# actual = [v, mu[0], mu[1], Sigma[0][0], Sigma[1][1], Sigma[0][1], gam[0], gam[1]]
+#print('Actual Parameters:')
+# print(actual)
+
+# Generate random 2 by 1000 data points
 np.random.seed(42)
-x = np.random.multivariate_normal(
-    mean=[1.0, 2.0],
-    cov=[[1.0, 0.5], [0.5, 1.5]],
-    size=200
-)
+samples = np.random.randn(1000, 2)
+print(samples)
 
-mle_params = compute_mle(x.T, x_0)
-print("sadsfljkajdsflkajdfs")
-print("Estimated Parameters:", mle_params)
+# Assuming you have already implemented the mvnctpdfln and MVNCT2estimation functions
+param, stderr, iters, loglik, Varcov = MVNCT2estimation(samples)
+print('Estimated Parameters:')
+print(param)
+print('Standard Errors:')
+print(stderr)
 
+# Compute AIC and BIC for the MLE parameters
+def compute_aic_bic(log_likelihood, num_params, num_data):
+    aic = -2 * log_likelihood + 2 * num_params
+    bic = -2 * log_likelihood + num_params * np.log(num_data)
+    return aic, bic
 
+# Number of parameters estimated
+num_params = len(param)
+
+# Number of data points
+num_data = samples.shape[1]
+
+# Compute AIC and BIC
+aic, bic = compute_aic_bic(loglik, num_params, num_data)
+
+print(f"AIC: {aic}")
+print(f"BIC: {bic}")
 
 #This version is a not robust one of the previous
 #%%
@@ -1876,6 +1929,7 @@ print(aic_bic_bvlp_bvnct(samples, initial_guess))
 
 #%% II.4
 import pandas as pd
+from scipy.stats import gaussian_kde
 
 # Reading the data.
 df = pd.read_csv("DJIA30stockreturns.csv")
