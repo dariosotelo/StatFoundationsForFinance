@@ -584,11 +584,46 @@ def MVNCT2estimation(x):
     loglik = -fval * T
     return param, stderr, iters, loglik, Varcov
 
+# Program 2
+def aic_bic_bvlp_bvnct(data, initial_guess):
+         
+    initial_guess_mlp = initial_guess[0]
+    result_mixture_laplace = minimize(
+    fun=negative_log_likelihood_two_component_mixture_bivariate_laplace,
+    x0=initial_guess_mlp,
+    args=(data,),  # Pass the dataset to the function
+    method="L-BFGS-B"  # Robust method for bounds and large problems
+    )
+    
+    initial_guess_bvnct = initial_guess[1]
+    result_bvnct = minimize(
+    fun=MVNCTloglik,
+    x0=initial_guess_bvnct,
+    args=(data,),  # Pass the dataset to the function
+    method="L-BFGS-B"  # Robust method for bounds and large problems
+    )
+    
+    log_likelihood_mixture_laplace = -result_mixture_laplace.fun
+    log_likelihood_bvnct = -result_bvnct.fun
+    
+    # Number of parameters (dimensionality of initial_guess)
+    k_mlp = len(initial_guess_mlp)
+    k_bvnct = len(initial_guess_bvnct)
+    
+    # Number of data points
+    n = len(data)
+    
+    aic_mixture_laplace = 2 * k_mlp - 2 * log_likelihood_mixture_laplace
+    bic_mixture_laplace = k_mlp * np.log(n) - 2 * log_likelihood_mixture_laplace
+    
+    aic_bvnct = 2 * k_bvnct - 2 * log_likelihood_bvnct
+    bic_bvnct = k_bvnct * np.log(n) - 2 * log_likelihood_bvnct
+
+    return aic_mixture_laplace, bic_mixture_laplace, aic_bvnct, bic_bvnct
 
 
 
-
-#%% helpful stuff for testing MLE mvnct
+#%% helpful stuff for testing MLE mvnct Test for the II.3.a
 
 # Parameters for the distribution
 mu = np.array([0, 0])           # Location vector
@@ -640,7 +675,30 @@ param, stderr, iters, loglik, Varcov = MVNCT2estimation(samples)
 print(param)
 
 
+#%% Test for II.3.b
 
+initial_guess_bvlp = np.array([
+    1, 2,          # loc1 (mean of component 1)
+    5, 6,          # loc2 (mean of component 2)
+    1.0, 1.2,      # scale1, scale2
+    1.0, 0.5, 1.0, # Sigma1 (3 values: [var1, cov, var2])
+    1.5, -0.3, 0.8,# Sigma2 (3 values: [var1, cov, var2])
+    0.6            # weight1 (mixture weight for component 1)
+])
+initial_guess_bvnct = np.array([
+    0, 0,       # mu_x, mu_y (location vector)
+    0.5, 0.5,   # gamma_x, gamma_y (noncentrality vector)
+    10,         # v (degrees of freedom)
+    1, 0, 1     # Sigma_xx, Sigma_xy, Sigma_yy (covariance matrix elements)
+])
+
+initial_guess = [
+    initial_guess_bvlp,  
+    initial_guess_bvnct   
+]
+
+# The order of printing is this one: aic_mixture_laplace, bic_mixture_laplace, aic_bvnct, bic_bvnct
+print(aic_bic_bvlp_bvnct(samples, initial_guess))
 
 
 
