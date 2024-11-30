@@ -1430,7 +1430,9 @@ def MVNCT2estimation(x):
     x = np.asarray(x)
     T, d = x.shape  # Now the data is (T, 2) instead of (2, T)
     if d != 2:
-        raise ValueError('Not implemented for dimensions other than 2.')
+        x = x.T
+        T, d = x.shape
+        #raise ValueError('Not implemented for dimensions other than 2.')
 
     # Transpose the data for compatibility with the rest of the code
     x = x.T  # Now x is 2 x T

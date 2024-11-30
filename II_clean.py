@@ -15,7 +15,8 @@ from scipy.integrate import quad
 import scipy.special as sp
 from scipy.optimize import minimize
 from scipy.special import gammaln, gamma, kv
-from scipy.linalg import cholesky, solve_triangular
+from scipy.linalg import cholesky, solve_triangular, inv, eigvals
+
 
 
 #%% II.1
@@ -416,13 +417,266 @@ def slog(x):
     x_clipped = np.clip(x, realmin, realmax)
     return np.log(x_clipped)
 
+def transform_param_bounded_to_unbounded(param_bounded, bound):
+    """
+    Transforms parameters from bounded space to unbounded space for optimization.
+    """
+    param_unbounded = np.copy(param_bounded)
+    for i in range(len(param_bounded)):
+        if bound['which'][i]:
+            lo = bound['lo'][i]
+            hi = bound['hi'][i]
+            p = param_bounded[i]
+            # Apply logit transformation
+            p_std = (p - lo) / (hi - lo)
+            p_std = np.clip(p_std, 1e-8, 1 - 1e-8)  # Avoid division by zero or log(0)
+            param_unbounded[i] = np.log(p_std / (1 - p_std))
+        else:
+            # Unbounded parameter
+            param_unbounded[i] = param_bounded[i]
+    return param_unbounded
+
+def transform_param_unbounded_to_bounded(param_unbounded, bound):
+    """
+    Transforms parameters from unbounded space back to bounded space after optimization.
+    """
+    param_bounded = np.copy(param_unbounded)
+    for i in range(len(param_unbounded)):
+        if bound['which'][i]:
+            lo = bound['lo'][i]
+            hi = bound['hi'][i]
+            u = param_unbounded[i]
+            # Apply inverse logit transformation
+            exp_u = np.exp(u)
+            p_std = exp_u / (1 + exp_u)
+            param_bounded[i] = lo + p_std * (hi - lo)
+        else:
+            # Unbounded parameter
+            param_bounded[i] = param_unbounded[i]
+    return param_bounded
+
+def compute_jacobian(param_unbounded, bound):
+    """
+    Computes the Jacobian matrix of the transformation from unbounded to bounded parameters.
+    """
+    n_params = len(param_unbounded)
+    jacobian = np.eye(n_params)
+    for i in range(n_params):
+        if bound['which'][i]:
+            lo = bound['lo'][i]
+            hi = bound['hi'][i]
+            u = param_unbounded[i]
+            # Derivative of the inverse logit transformation
+            exp_u = np.exp(u)
+            denom = (1 + exp_u)**2
+            jacobian[i, i] = (hi - lo) * exp_u / denom
+        else:
+            # Unbounded parameter
+            jacobian[i, i] = 1
+    return jacobian
+
+
+def MVNCTloglik(param_unbounded, x, bound):
+    """
+    Computes the negative log-likelihood for optimization.
+    """
+    # Transform parameters to bounded space
+    param = transform_param_unbounded_to_bounded(param_unbounded, bound)
+    
+    k = param[0]
+    mu = param[1:3]
+    scale = param[3:5]
+    R12 = param[5]
+    gam = param[6:8]
+    
+    # Construct correlation matrix R
+    R = np.array([[1, R12], [R12, 1]])
+    # Check if R is positive definite
+    if np.min(eigvals(R)) < 1e-4:
+        return 1e5  # Large penalty for invalid R
+    
+    # Standardize input data
+    xx = (x - mu[:, np.newaxis]) / scale[:, np.newaxis]
+    
+    # Compute log-likelihood vector
+    try:
+        llvec = mvnctpdfln(xx, mu, gam, k, R) - np.log(np.prod(scale))
+        ll = -np.mean(llvec)
+    except Exception:
+        ll = 1e5  # Large penalty for numerical errors
+        return ll
+    
+    if np.isinf(ll) or np.isnan(ll):
+        ll = 1e5  # Penalty for infinite or NaN log-likelihood
+    return ll
+
+
+# This is the important code
+def MVNCT2estimation(x):
+    """
+    Estimates the parameters of a bivariate noncentral t-distribution.
+
+    Parameters
+    ----------
+    x : ndarray of shape (T, 2)
+        Input data, where T is the number of observations.
+
+    Returns
+    -------
+    param : ndarray
+        Estimated parameters.
+    stderr : ndarray
+        Standard errors of the estimated parameters.
+    iters : int
+        Number of iterations performed by the optimizer.
+    loglik : float
+        Log-likelihood of the estimated model.
+    Varcov : ndarray
+        Variance-covariance matrix of the estimated parameters.
+    """
+    x = np.asarray(x)
+    T, d = x.shape  # Now the data is (T, 2) instead of (2, T)
+    if d != 2:
+        raise ValueError('Not implemented for dimensions other than 2.')
+
+    # Transpose the data for compatibility with the rest of the code
+    x = x.T  # Now x is 2 x T
+
+    # Define bounds and initial parameters
+    bound = {
+        'lo': np.array([1.1, -1, -1, 0.01, 0.01, -1, -4, -4]),
+        'hi': np.array([20, 1, 1, 100, 100, 1, 4, 4]),
+        'which': np.array([1, 0, 0, 1, 1, 1, 1, 1], dtype=bool)
+    }
+    initvec = np.array([3, 0, 0, 0.5, 0.5, 0, 0, 0])
+
+    # Transform initial parameters to unbounded space
+    initvec_unbounded = transform_param_bounded_to_unbounded(initvec, bound)
+
+    # Optimization parameters
+    maxiter = 300
+    tol = 1e-6
+
+    # Optimization using minimize
+    result = minimize(
+        fun=MVNCTloglik,
+        x0=initvec_unbounded,
+        args=(x, bound),
+        method='BFGS',
+        options={'disp': True, 'maxiter': maxiter, 'gtol': tol}
+    )
+
+    pout_unbounded = result.x
+    fval = result.fun
+    hess_inv = result.hess_inv  # Approximate inverse Hessian
+    iters = result.nit  # Number of iterations
+
+    # Transform parameters back to bounded space
+    param = transform_param_unbounded_to_bounded(pout_unbounded, bound)
+
+    # Compute variance-covariance matrix
+    # Adjust the covariance matrix due to parameter transformations
+    jacobian = compute_jacobian(pout_unbounded, bound)
+    Varcov_unbounded = hess_inv / T
+    Varcov = jacobian @ Varcov_unbounded @ jacobian.T
+
+    stderr = np.sqrt(np.diag(Varcov))
+    loglik = -fval * T
+    return param, stderr, iters, loglik, Varcov
 
 
 
-#%% helpful junk 2
 
-samples = simulate_mixture_bivariate_laplace(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n)
 
+#%% helpful stuff for testing MLE mvnct
+
+# Parameters for the distribution
+mu = np.array([0, 0])           # Location vector
+gam = np.array([0, 2.5])          # Noncentrality vector
+v = 4                           # Degrees of freedom
+Sigma = np.array([[1, 0.5],
+                  [0.5, 1]])     # Covariance matrix
+n_samples = 500              # Number of samples
+
+x_min, x_max = -15, 15  # Range for both dimensions
+y_min, y_max = -15, 15
+
+# Precompute the maximum PDF value (optional for efficiency)
+x_test = np.linspace(x_min, x_max, 100)
+y_test = np.linspace(y_min, y_max, 100)
+X_test, Y_test = np.meshgrid(x_test, y_test)
+test_points = np.vstack([X_test.ravel(), Y_test.ravel()])
+log_pdf_test = mvnctpdfln(test_points, mu, gam, v, Sigma)
+pdf_test = np.exp(log_pdf_test)
+pdf_max = np.max(pdf_test)  # Maximum value of the PDF
+
+# Initialize storage for samples
+samples = np.zeros((2, n_samples))
+count = 0
+
+# Rejection sampling loop
+while count < (n_samples):
+    # Step 1: Generate a random point in the sampling space
+    x_rand = x_min + (x_max - x_min) * np.random.rand()
+    y_rand = y_min + (y_max - y_min) * np.random.rand()
+    candidate = np.array([x_rand, y_rand])
+
+    # Step 2: Evaluate the PDF at the candidate point
+    log_pdf_val = mvnctpdfln(candidate.reshape(2, 1), mu, gam, v, Sigma)
+    pdf_val = np.exp(log_pdf_val)[0]  # Since mvnctpdfln returns an array
+
+    # Step 3: Generate a uniform random number and accept/reject
+    u = np.random.rand() * pdf_max  # Scale uniform random number by maximum PDF value
+    if u <= pdf_val:
+        samples[:, count] = candidate
+        count += 1
+
+print(samples)
+
+actual = [v, mu[0], mu[1], Sigma[0][0], Sigma[1][1], Sigma[0][1], gam[0], gam[1]]
+print('Actual Parameters:')
+print(actual)
+param, stderr, iters, loglik, Varcov = MVNCT2estimation(samples)
+print(param)
+
+
+
+
+
+
+#%%
+
+#This is a function to sample a dataset of mvnct
+def sample_mvnct(mu, Sigma, v, size=1):
+    
+    mu = np.asarray(mu)  # Ensure mu is a NumPy array
+    d = len(mu)  # Dimensionality of the distribution
+    
+    # Step 1: Sample from a standard multivariate normal distribution
+    Z = np.random.multivariate_normal(mean=np.zeros(d), cov=Sigma, size=size)
+    
+    # Step 2: Sample from a chi-squared distribution with v degrees of freedom
+    W = np.random.chisquare(df=v, size=size)
+    
+    # Step 3: Transform Z and W to generate MVNCT samples
+    # Each row of Z corresponds to a sample from MVNCT
+    samples = mu + Z / np.sqrt(W[:, None] / v)
+    
+    return samples
+
+mu = [0, 0]  # Mean vector (non-centrality)
+Sigma = [[1, 0.5], [0.5, 1]]  # Covariance matrix
+v = 5  # Degrees of freedom
+n_samples = 1000  # Number of samples to generate
+
+samples = sample_mvnct(mu, Sigma, v, size=n_samples)
+
+#%%
+param, stderr, iters, loglik, Varcov = MVNCT2estimation(samples)
+print('Estimated Parameters:')
+print(param)
+print('Standard Errors:')
+print(stderr)
 
 
 #%% helpful junk
