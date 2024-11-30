@@ -646,11 +646,11 @@ pdf_test = np.exp(log_pdf_test)
 pdf_max = np.max(pdf_test)  # Maximum value of the PDF
 
 # Initialize storage for samples
-samples = np.zeros((2, n_samples))
+samples = np.zeros((n_samples, 2))
 count = 0
 
 # Rejection sampling loop
-while count < (n_samples):
+while count < n_samples:
     # Step 1: Generate a random point in the sampling space
     x_rand = x_min + (x_max - x_min) * np.random.rand()
     y_rand = y_min + (y_max - y_min) * np.random.rand()
@@ -663,7 +663,7 @@ while count < (n_samples):
     # Step 3: Generate a uniform random number and accept/reject
     u = np.random.rand() * pdf_max  # Scale uniform random number by maximum PDF value
     if u <= pdf_val:
-        samples[:, count] = candidate
+        samples[count, :] = candidate
         count += 1
 
 print(samples)

@@ -7,6 +7,7 @@ from scipy.fft import fftshift, ifft
 from scipy.integrate import quad
 from math import sqrt, exp
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -1312,6 +1313,7 @@ from scipy.linalg import inv, eigvals
 from scipy.stats import chi2
 from scipy.linalg import cholesky
 from tqdm import tqdm
+import pandas as pd
 
 def transform_param_bounded_to_unbounded(param_bounded, bound):
     """
@@ -1481,52 +1483,59 @@ def MVNCT2estimation(x):
 
 
 
-# Parameters for the distribution
-mu = np.array([0, 0])           # Location vector
-gam = np.array([0, 2.5])          # Noncentrality vector
-v = 4                           # Degrees of freedom
-Sigma = np.array([[1, 0.5],
-                  [0.5, 1]])     # Covariance matrix
-n_samples = 500              # Number of samples
+# # Parameters for the distribution
+# mu = np.array([0, 0])           # Location vector
+# gam = np.array([0, 2.5])          # Noncentrality vector
+# v = 4                           # Degrees of freedom
+# Sigma = np.array([[1, 0.5],
+#                   [0.5, 1]])     # Covariance matrix
+# n_samples = 500              # Number of samples
 
-x_min, x_max = -15, 15  # Range for both dimensions
-y_min, y_max = -15, 15
+# x_min, x_max = -15, 15  # Range for both dimensions
+# y_min, y_max = -15, 15
 
-# Precompute the maximum PDF value (optional for efficiency)
-x_test = np.linspace(x_min, x_max, 100)
-y_test = np.linspace(y_min, y_max, 100)
-X_test, Y_test = np.meshgrid(x_test, y_test)
-test_points = np.vstack([X_test.ravel(), Y_test.ravel()])
-log_pdf_test = mvnctpdfln(test_points, mu, gam, v, Sigma)
-pdf_test = np.exp(log_pdf_test)
-pdf_max = np.max(pdf_test)  # Maximum value of the PDF
+# # Precompute the maximum PDF value (optional for efficiency)
+# x_test = np.linspace(x_min, x_max, 100)
+# y_test = np.linspace(y_min, y_max, 100)
+# X_test, Y_test = np.meshgrid(x_test, y_test)
+# test_points = np.vstack([X_test.ravel(), Y_test.ravel()])
+# log_pdf_test = mvnctpdfln(test_points, mu, gam, v, Sigma)
+# pdf_test = np.exp(log_pdf_test)
+# pdf_max = np.max(pdf_test)  # Maximum value of the PDF
 
-# Initialize storage for samples
-samples = np.zeros((n_samples, 2))
-count = 0
+# # Initialize storage for samples
+# samples = np.zeros((n_samples, 2))
+# count = 0
 
-# Rejection sampling loop
-while count < n_samples:
-    # Step 1: Generate a random point in the sampling space
-    x_rand = x_min + (x_max - x_min) * np.random.rand()
-    y_rand = y_min + (y_max - y_min) * np.random.rand()
-    candidate = np.array([x_rand, y_rand])
+# # Rejection sampling loop
+# while count < n_samples:
+#     # Step 1: Generate a random point in the sampling space
+#     x_rand = x_min + (x_max - x_min) * np.random.rand()
+#     y_rand = y_min + (y_max - y_min) * np.random.rand()
+#     candidate = np.array([x_rand, y_rand])
 
-    # Step 2: Evaluate the PDF at the candidate point
-    log_pdf_val = mvnctpdfln(candidate.reshape(2, 1), mu, gam, v, Sigma)
-    pdf_val = np.exp(log_pdf_val)[0]  # Since mvnctpdfln returns an array
+#     # Step 2: Evaluate the PDF at the candidate point
+#     log_pdf_val = mvnctpdfln(candidate.reshape(2, 1), mu, gam, v, Sigma)
+#     pdf_val = np.exp(log_pdf_val)[0]  # Since mvnctpdfln returns an array
 
-    # Step 3: Generate a uniform random number and accept/reject
-    u = np.random.rand() * pdf_max  # Scale uniform random number by maximum PDF value
-    if u <= pdf_val:
-        samples[count, :] = candidate
-        count += 1
+#     # Step 3: Generate a uniform random number and accept/reject
+#     u = np.random.rand() * pdf_max  # Scale uniform random number by maximum PDF value
+#     if u <= pdf_val:
+#         samples[count, :] = candidate
+#         count += 1
 
-print(samples)
-
-actual = [v, mu[0], mu[1], Sigma[0][0], Sigma[1][1], Sigma[0][1], gam[0], gam[1]]
-print('Actual Parameters:')
-print(actual)
+# print(samples)
+# actual = [v, mu[0], mu[1], Sigma[0][0], Sigma[1][1], Sigma[0][1], gam[0], gam[1]]
+# print('Actual Parameters:')
+# print(actual)
+# Read CSV file from the provided URL
+url = "https://github.com/dariosotelo/StatFoundationsForFinance/raw/e5d27c5a703326cd3d113ecacbc61c05a58d94e8/DJIA30stockreturns.csv"
+df = pd.read_csv(url).values
+n_stocks = df.shape[1]
+n_samples = df.shape[0]
+stock_indices = np.random.choice(range(n_stocks), 2, replace=True)
+samples = df[:, stock_indices]
+print(samples[:, :])
 
 # # Generate random 2 by 1000 data points
 # np.random.seed(42)
