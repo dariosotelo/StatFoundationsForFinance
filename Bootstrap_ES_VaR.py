@@ -1524,6 +1524,10 @@ while count < n_samples:
 
 print(samples)
 
+actual = [v, mu[0], mu[1], Sigma[0][0], Sigma[1][1], Sigma[0][1], gam[0], gam[1]]
+print('Actual Parameters:')
+print(actual)
+
 # # Generate random 2 by 1000 data points
 # np.random.seed(42)
 # samples = np.random.randn(1000, 2)
