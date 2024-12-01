@@ -46,7 +46,7 @@ Sigma1 = np.array([[1, 0.5], [0.5, 1]])
 
 mu2 = [0, 0]
 b2 = [5, 5]
-Sigma2 = np.array([[4, 2], [2, 4]])
+Sigma2 = np.array([[4, 0.5], [0.5, 4]])
 
 n = 1000
 
@@ -116,7 +116,7 @@ our_result = bessel_k_int(nu, x)
 def graph_difference(nu, x_values):
     y_values = [abs(bessel_k_int(nu, x_val) - sp.kv(nu, x_val)) for x_val in x_values]
     plt.figure(figsize=(10, 6))
-    plt.plot(x_values, y_values, marker='o', linestyle='-', color='blue', label='Difference')
+    plt.plot(x_values, y_values, linestyle='-', color='blue', label='Difference')
     plt.title('Difference between bessel_k_int and scipy bessel_k')
     plt.xlabel('x values')
     plt.ylabel('Absolute Difference')
@@ -126,7 +126,7 @@ def graph_difference(nu, x_values):
 
 
 # You can change the range, after 20 the difference is minimal
-x_values = np.linspace(-15, 15, 200)
+x_values = np.linspace(0, 15, 300)
     
 graph_difference(nu, x_values)
 
@@ -279,12 +279,12 @@ def generate_bivariate_discrete_laplace_with_sigma_param(n, params):
 
 # Example parameters
 params = np.array([
-    1, 2,          # loc1 (mean of component 1)
-    5, 6,          # loc2 (mean of component 2)
-    1.0, 1.2,      # scale1, scale2
+    1, 1,          # loc1 (mean of component 1)
+    10, 10,          # loc2 (mean of component 2)
+    6, 2,      # scale1, scale2
     1.0, 0.5, 1.0, # Sigma1 (3 values: [var1, cov, var2])
-    1.5, -0.3, 0.8,# Sigma2 (3 values: [var1, cov, var2])
-    0.6            # weight1 (mixture weight for component 1)
+    4, 0.3, 2,# Sigma2 (3 values: [var1, cov, var2])
+    0.7            # weight1 (mixture weight for component 1)
 ])
 
 # Generate synthetic data
@@ -588,23 +588,15 @@ def MVNCT2estimation(x):
 def aic_bic_bvlp_bvnct(data, initial_guess):
          
     initial_guess_mlp = initial_guess[0]
-    result_mixture_laplace = minimize(
-    fun=negative_log_likelihood_two_component_mixture_bivariate_laplace,
-    x0=initial_guess_mlp,
-    args=(data,),  # Pass the dataset to the function
-    method="L-BFGS-B"  # Robust method for bounds and large problems
-    )
+    result_mixture_laplace = negative_log_likelihood_two_component_mixture_bivariate_laplace(initial_guess_mlp,data)
+    mlp_ll = -result_mixture_laplace
     
     initial_guess_bvnct = initial_guess[1]
-    result_bvnct = minimize(
-    fun=MVNCTloglik,
-    x0=initial_guess_bvnct,
-    args=(data,),  # Pass the dataset to the function
-    method="L-BFGS-B"  # Robust method for bounds and large problems
-    )
+    result_bvnct = MVNCT2estimation(data)
+    bvnctll = result_bvnct[3]
     
-    log_likelihood_mixture_laplace = -result_mixture_laplace.fun
-    log_likelihood_bvnct = -result_bvnct.fun
+    log_likelihood_mixture_laplace = mlp_ll
+    log_likelihood_bvnct = bvnctll
     
     # Number of parameters (dimensionality of initial_guess)
     k_mlp = len(initial_guess_mlp)
@@ -697,8 +689,16 @@ initial_guess = [
     initial_guess_bvnct   
 ]
 
+# Generate a random 5000x2 set of samples
+random_samples = np.random.rand(500, 2)
+
+# Print the first 5 samples for verification
+print("Random samples (first 5 samples):")
+print(random_samples[:5])
+
 # The order of printing is this one: aic_mixture_laplace, bic_mixture_laplace, aic_bvnct, bic_bvnct
-print(aic_bic_bvlp_bvnct(samples, initial_guess))
+print(aic_bic_bvlp_bvnct(random_samples, initial_guess))
+print('meow')
 
 
 

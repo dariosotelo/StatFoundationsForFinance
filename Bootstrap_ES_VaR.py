@@ -443,7 +443,7 @@ def stabgen(nobs, a, b=0, c=1, d=0, seed=None):
         x = c * x + d
     return x
 
-stable_sample = stabgen(10000, 0, -0.3)
+stable_sample = stabgen(10000, 1.7, -0.3)
 nonparametric_bootstrap_samples, var_nonpara = nonparametric_bootstrap(stable_sample, 0.01, 100, 6667)
 bootstrap_samples_t, var_t = parametric_bootstrap_t(stable_sample, 0.01, 100, 10000)
 bootstrap_samples_nonc, var_nonc = parametric_bootstrap_nonc(stable_sample, 0.01, 100, 10000)
@@ -876,13 +876,13 @@ def simulate_mixture_bivariate_laplace(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n):
 
 # Parameters
 pi = 0.7  # Mixing weight for the first component
-mu1 = [0, 0]  # Location parameters for the first component
+mu1 = [20, 40]  # Location parameters for the first component
 b1 = [10, 10]  # Scale parameters for the first component
 Sigma1 = np.array([[1, 0.5], [0.5, 1]])  # Covariance matrix for the first component
 
 mu2 = [0, 0]  # Location parameters for the second component
 b2 = [5, 5]  # Scale parameters for the second component
-Sigma2 = np.array([[4, 2], [2, 4]])  # Covariance matrix for the second component (more extreme returns)
+Sigma2 = np.array([[4, 0.5], [0.5, 4]])  # Covariance matrix for the second component (more extreme returns)
 
 n = 1000  # Number of samples
 
@@ -1042,6 +1042,7 @@ def bivariate_discrete_laplace_logpdf(mean, scale, x):
     x1, x2 = x[:, 0], x[:, 1]
     return -np.abs(x1 - mu1) / b1 - np.abs(x2 - mu2) / b2 - np.log(2 * b1 * b2)
 
+
 # Negative log-likelihood for the k=2 mixture model
 def negative_log_likelihood_bvlp(params, x):
     """
@@ -1070,8 +1071,8 @@ def negative_log_likelihood_bvlp(params, x):
     return -np.sum(log_likelihood)  # Negative log-likelihood
 
 # Generate synthetic data (mixture of two bivariate discrete Laplace distributions)
-np.random.seed(42)
-n_samples = 200
+
+n_samples = 2000
 data1 = np.random.randint(-5, 5, size=(n_samples // 2, 2))
 data2 = np.random.randint(5, 15, size=(n_samples // 2, 2))
 data = np.vstack([data1, data2])
@@ -1148,12 +1149,12 @@ def generate_bivariate_discrete_laplace(n, w1, mu1, b1, mu2, b2):
 # True parameters
 w1_true = 0.6
 mu1_true = [1, 2]
-b1_true = [1, 1.5]
+b1_true = [6, 6]
 mu2_true = [5, 6]
-b2_true = [1.2, 0.8]
+b2_true = [2, 2]
 
 # Generate synthetic data
-n_samples = 1000
+n_samples = 10000
 data = generate_bivariate_discrete_laplace(
     n=n_samples, w1=w1_true, mu1=mu1_true, b1=b1_true, mu2=mu2_true, b2=b2_true
 )
@@ -1192,6 +1193,8 @@ result = minimize(
     bounds=bounds,
     options={'disp': True}
 )
+
+print(result.fun)
 
 # Extract results
 estimated_params = result.x
@@ -1528,19 +1531,44 @@ def MVNCT2estimation(x):
 # actual = [v, mu[0], mu[1], Sigma[0][0], Sigma[1][1], Sigma[0][1], gam[0], gam[1]]
 # print('Actual Parameters:')
 # print(actual)
+
 # Read CSV file from the provided URL
 url = "https://github.com/dariosotelo/StatFoundationsForFinance/raw/e5d27c5a703326cd3d113ecacbc61c05a58d94e8/DJIA30stockreturns.csv"
 df = pd.read_csv(url).values
 n_stocks = df.shape[1]
 n_samples = df.shape[0]
 stock_indices = np.random.choice(range(n_stocks), 2, replace=True)
-samples = df[:, stock_indices]
-print(samples[:, :])
+data = df[:, stock_indices]
+print(data[:, :])
 
-# # Generate random 2 by 1000 data points
-# np.random.seed(42)
-# samples = np.random.randn(1000, 2)
-# print(samples)
+# Compute AIC and BIC for the Laplace MLE parameters
+def compute_aic_bic_laplace(log_likelihood, num_params, num_data):
+    aic = -2 * log_likelihood + 2 * num_params
+    bic = -2 * log_likelihood + num_params * np.log(num_data)
+    return aic, bic
+
+result_stock = minimize(
+    fun=negative_log_likelihood_bvlp,
+    x0=initial_guess,
+    args=(data,),
+    method='L-BFGS-B',
+    bounds=bounds,
+    options={'disp': True}
+)
+
+lap_nll_stock = result_stock.fun
+
+num_params_laplace_stock = len(result_stock.x)
+
+num_data_stock = data.shape[1]
+
+# Compute AIC and BIC for Laplace MLE
+aic_laplace_s, bic_laplace_s = compute_aic_bic_laplace(-lap_nll_stock, num_params_laplace_stock, num_data_stock)
+
+
+
+# Generate random 10000 by 2 data points
+samples = np.random.randn(10000, 2)
 
 # Assuming you have already implemented the mvnctpdfln and MVNCT2estimation functions
 param, stderr, iters, loglik, Varcov = MVNCT2estimation(samples)
@@ -1550,8 +1578,38 @@ print('Standard Errors:')
 print(stderr)
 print(-loglik)
 
+result = minimize(
+    fun=negative_log_likelihood_bvlp,
+    x0=initial_guess,
+    args=(samples,),
+    method='L-BFGS-B',
+    bounds=bounds,
+    options={'disp': True}
+)
+
+lap_nll= result.fun
+
+# Compute AIC and BIC for the Laplace MLE parameters
+def compute_aic_bic_laplace(log_likelihood, num_params, num_data):
+    aic = -2 * log_likelihood + 2 * num_params
+    bic = -2 * log_likelihood + num_params * np.log(num_data)
+    return aic, bic
+
+# Number of parameters estimated for Laplace MLE
+num_params_laplace = len(result.x)
+
+num_data = samples.shape[1]
+
+# Compute AIC and BIC for Laplace MLE
+aic_laplace, bic_laplace = compute_aic_bic_laplace(-lap_nll, num_params_laplace, num_data)
+
+print(f"AIC (Laplace): {aic_laplace}")
+print(f"BIC (Laplace): {bic_laplace}")
+
+print(f"AIC (Laplace) stock: {aic_laplace_s}")
+print(f"BIC (Laplace) stock: {bic_laplace_s}")
 # Compute AIC and BIC for the MLE parameters
-def compute_aic_bic(log_likelihood, num_params, num_data):
+def compute_aic_bic_nct(log_likelihood, num_params, num_data):
     aic = -2 * log_likelihood + 2 * num_params
     bic = -2 * log_likelihood + num_params * np.log(num_data)
     return aic, bic
@@ -1563,7 +1621,7 @@ num_params = len(param)
 num_data = samples.shape[1]
 
 # Compute AIC and BIC
-aic, bic = compute_aic_bic(loglik, num_params, num_data)
+aic, bic = compute_aic_bic_nct(loglik, num_params, num_data)
 
 print(f"AIC: {aic}")
 print(f"BIC: {bic}")

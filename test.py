@@ -1,173 +1,137 @@
-#%% Part 2 Prep
-
 import numpy as np
-from scipy.linalg import cho_solve, cho_factor
-from scipy.special import gammaln
-import matplotlib.pyplot as plt
-import math
-import numpy as np
-from scipy.linalg import cholesky, solve_triangular
-from scipy.special import gammaln
+from scipy.optimize import minimize
+from scipy.special import kv, gamma
+from scipy.linalg import inv, det, eigh
 
 
-import numpy as np
-from scipy.linalg import cholesky, solve_triangular
-from scipy.special import gammaln
-
-def slog(x):
-    # Truncated log to avoid -Inf or +Inf
-    realmin = np.finfo(float).tiny
-    realmax = np.finfo(float).max
-    x_clipped = np.clip(x, realmin, realmax)
-    return np.log(x_clipped)
-
-def mvnctpdfln(x, mu, gam, v, Sigma):
+def bivariate_discrete_laplace_pdf(location, scale, Sigma, y):
     """
-    Compute the log pdf of the multivariate noncentral t-distribution.
-
-    Parameters
-    ----------
-    x : ndarray of shape (d, T)
-        Evaluation points.
-    mu : ndarray of shape (d,)
-        Location vector.
-    gam : ndarray of shape (d,)
-        Noncentrality vector.
-    v : float
-        Degrees of freedom.
-    Sigma : ndarray of shape (d, d)
-        Dispersion matrix.
-
-    Returns
-    -------
-    pdfLn : ndarray of shape (T,)
-        Log pdf values at x.
+    Compute the PDF of the bivariate Laplace distribution.
+    Parameters:
+    - y: ndarray, observation vector of size (d,)
+    - location: ndarray, location vector of size (d,)
+    - Sigma: ndarray, positive-definite covariance matrix of size (d, d)
+    - scale: float, parameter of the gamma distribution (must be > 0)
+    Returns:
+    - PDF value at the given y.
     """
-    x = np.asarray(x)
-    mu = np.asarray(mu).reshape(-1, 1)
-    gam = np.asarray(gam).reshape(-1, 1)
-    Sigma = np.asarray(Sigma)
-    
-    d, T = x.shape
-    C = Sigma.copy()
-    
-    # Cholesky decomposition
-    try:
-        R = cholesky(C, lower=False)  # R is upper triangular
-    except np.linalg.LinAlgError:
-        raise ValueError('C is not (semi) positive definite')
-    
-    vn2 = (v + d) / 2
-    xm = x - mu  # Broadcasting over T
-    
-    # Compute rho = sum((R' \ xm).^2, 1)
-    tmp = solve_triangular(R.T, xm, lower=True)
-    rho = np.sum(tmp**2, axis=0)  # Sum over rows (axis=0)
-    
-    # Initial log pdf computation
-    pdfLn = (gammaln(vn2)
-             - (d / 2) * slog(np.pi * v)
-             - gammaln(v / 2)
-             - np.sum(slog(np.diag(R)))
-             - vn2 * np.log1p(rho / v))
-    
-    # If noncentrality vector is zero, return
-    if np.all(gam == 0):
-        return pdfLn
-    
-    idx = pdfLn >= -37
-    maxiter = int(1e4)
-    k = 0
-    
-    if np.any(idx):
-        # Compute gcg = sum((R' \ gam).^2)
-        tmp = solve_triangular(R.T, gam, lower=True)
-        gcg = np.sum(tmp**2)
-        pdfLn -= 0.5 * gcg
-        
-        # Compute xcg = xm' * (C \ gam)
-        c_inv_gam = np.linalg.solve(C, gam)
-        xcg = (xm.T @ c_inv_gam).flatten()  # Shape (T,)
-        
-        # Allow for complex logarithms
-        log_xcg = np.log(xcg.astype(np.complex128))
-        
-        # Compute term
-        term = 0.5 * np.log(2) + log_xcg - 0.5 * slog(v + rho)
-        
-        # Handle numerical issues
-        realmin_log = np.log(np.finfo(float).tiny)
-        realmax_log = np.log(np.finfo(float).max)
-        term = np.where(np.isinf(term.real) & (term.real < 0), realmin_log, term)
-        term = np.where(np.isinf(term.real) & (term.real > 0), realmax_log, term)
-        
-        # Initialize logsumk
-        logsumk = np.zeros(T, dtype=np.complex128)
-        
-        # Compute initial terms
-        logterms = (gammaln((v + d + k) / 2)
-                    - gammaln(k + 1)
-                    - gammaln(vn2)
-                    + k * term)
-        ff = np.exp(logterms)
-        logsumk = np.where(idx, np.log(ff), logsumk)
-        
-        while k < maxiter:
-            k += 1
-            logterms = (gammaln((v + d + k) / 2)
-                        - gammaln(k + 1)
-                        - gammaln(vn2)
-                        + k * term)
-            ff = np.exp(logterms - logsumk)
-            
-            # Update logsumk where idx is True
-            logsumk = np.where(idx, logsumk + np.log1p(ff), logsumk)
-            
-            # Convergence check
-            idx_new = np.abs(ff) > 1e-4
-            idx = idx & idx_new
-            if not np.any(idx):
-                break
-        
-        pdfLn += logsumk.real  # Take the real part
-    else:
-        pdfLn = pdfLn.real
-    
-    return pdfLn.real
+    d = len(location)  # Dimensionality
+    diff = y - location  # (y - mu)
+    m = np.dot(diff.T, np.linalg.inv(Sigma)).dot(diff)  # Quadratic form (y-mu)' * Sigma^(-1) * (y-mu)
+
+    # Determinant of Sigma
+    det_Sigma = np.linalg.det(Sigma)
+
+    # Precompute constants
+    normalization = 2 / (np.sqrt(det_Sigma) * (2 * np.pi)**(d / 2) * gamma(scale))
+    bessel_arg = np.sqrt(2 * m)
+    bessel_factor = kv(scale - d / 2, bessel_arg)  # Modified Bessel function of the second kind
+
+    # PDF value
+    pdf = normalization * ((bessel_arg / 2)**(scale / 2 - d / 4)) * bessel_factor
+
+    return pdf
 
 
+def log_likelihood(params, x, weights):
+    """
+    Compute the negative log-likelihood for the 2-component bivariate Laplace mixture.
+    Parameters:
+        params: Model parameters (12-dimensional vector)
+        x: Data points (Nx2 matrix)
+        weights: Mixture weights [w1, w2]
+    Returns:
+        neg_loglik: Negative log-likelihood value
+    """
+    # Extract parameters
+    mu1 = params[0:2]
+    mu2 = params[2:4]
+    b1, b2 = params[4:6]
+    sigma1 = np.array([[params[6], params[7]], [params[7], params[8]]])
+    sigma2 = np.array([[params[9], params[10]], [params[10], params[11]]])
+    
+    # Ensure positive-definiteness of covariance matrices
+    if np.min(eigh(sigma1, eigvals_only=True)) <= 0 or np.min(eigh(sigma2, eigvals_only=True)) <= 0:
+        return 1e10
+
+    # Log-likelihood for each component
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    ll_comp1 = np.log(weights[0]) + np.log(np.array([bivariate_discrete_laplace_pdf(mu1, b1, sigma1, y) for y in x]) + epsilon)
+    ll_comp2 = np.log(weights[1]) + np.log(np.array([bivariate_discrete_laplace_pdf(mu2, b2, sigma2, y) for y in x]) + epsilon)
+
+    # Mixture log-likelihood
+    ll_total = np.logaddexp(ll_comp1, ll_comp2)
+    
+
+    return -np.sum(ll_total)  # Negative log-likelihood
 
 
-# Parameters for the multivariate noncentral t-distribution
-mu = np.array([0, 0])        # Location vector (mean)
-gam = np.array([0, 1])       # Noncentrality vector
-v = 4                        # Degrees of freedom
-Sigma = np.array([[1, 0.5],    # Covariance matrix
-                  [0.5, 1]])
+def estimate_mle(x, weights, init_params):
+    """
+    Estimate MLE for the 2-component bivariate Laplace mixture.
+    Parameters:
+        x: Data points (Nx2 matrix)
+        weights: Mixture weights [w1, w2]
+        init_params: Initial guess for the parameters (12-dimensional vector)
+    Returns:
+        result: Optimization result (MLE estimates, log-likelihood, standard errors)
+    """
+    bounds = [
+        (-10, 10), (-10, 10),  # mu1
+        (-10, 10), (-10, 10),  # mu2
+        (-10, 10), (-10, 10),  # b1, b2
+        (0.01, 10), (-0.99, 0.99), (0.01, 10),  # sigma1 (diag, off-diag, diag)
+        (0.01, 10), (-0.99, 0.99), (0.01, 10)   # sigma2 (diag, off-diag, diag)
+    ]
 
-# Define a grid of points in 2D space
-x1 = np.linspace(-5, 5, 100)  # Range for the first dimension
-x2 = np.linspace(-5, 5, 100)  # Range for the second dimension
-X1, X2 = np.meshgrid(x1, x2)  # Create a grid
-x = np.vstack([X1.ravel(), X2.ravel()])  # Stack grid points into an Nx2 matrix
+    result = minimize(
+        log_likelihood,
+        init_params,
+        args=(x, weights),
+        method='L-BFGS-B',
+        bounds=bounds,
+        options={'disp': True}
+    )
+    
+    # Compute standard errors using the inverse Hessian
+    hess_inv = result.hess_inv.todense() if hasattr(result.hess_inv, "todense") else result.hess_inv
+    std_err = np.sqrt(np.diag(hess_inv)) if hess_inv is not None else None
 
-# Evaluate the log-PDF at each grid point
-# Ensure you have the mvnctpdfln function defined in Python
-pdfLn = mvnctpdfln(x, mu, gam, v, Sigma)
-pdf = np.exp(pdfLn)
-print(pdf)
+    return {
+        'params': result.x,
+        'log_likelihood': -result.fun,
+        'success': result.success,
+        'std_err': std_err
+    }
 
-# Reshape the output PDF to match the grid for plotting
-pdf_grid = pdf.reshape(X1.shape)
 
-# Plot the PDF as a contour plot
-plt.figure(figsize=(10, 8))
-contour = plt.contour(X1, X2, pdf_grid, levels=20)  # 20 contour levels
-plt.colorbar(contour, label='PDF')
-plt.title('PDF of Multivariate Noncentral t-Distribution')
-plt.xlabel('x1')
-plt.ylabel('x2')
-plt.xlim(x1.min(), x1.max())
-plt.ylim(x2.min(), x2.max())
-plt.gca().set_aspect('equal', adjustable='box')  # Ensure the aspect ratio is equal
-plt.show()
+# Example usage
+# Simulated data (Nx2)
+n_samples = 2500
+mu1 = np.array([1, 2])
+mu2 = np.array([1, 0])
+sigma1 = np.array([[1, 0.5], [0.5, 1]])
+sigma2 = np.array([[4, 0.3], [0.3, 4]])
+b1, b2 = 6, 2
+
+# Generate data from two components
+z = np.random.choice([0, 1], size=n_samples, p=[0.6, 0.4])  # Mixture indicator
+x = np.array([
+    np.random.multivariate_normal(mu1, b1 * sigma1) if z_i == 0 else
+    np.random.multivariate_normal(mu2, b2 * sigma2)
+    for z_i in z
+])
+
+# Mixture weights
+weights = [0.6, 0.4]
+
+# Initial parameter guess (12-dimensional vector)
+init_params = [0, 0, 5, 5, 5, 1, 1, 0, 1, 2, 0, 2]
+
+# Estimate MLE
+result = estimate_mle(x, weights, init_params)
+
+# Print results
+print("Estimated Parameters:", result['params'])
+print("Log-Likelihood:", result['log_likelihood'])
+print("Standard Errors:", result['std_err'])
