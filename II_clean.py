@@ -48,7 +48,7 @@ mu2 = [0, 0]
 b2 = [5, 5]
 Sigma2 = np.array([[4, 0.5], [0.5, 4]])
 
-n = 1000
+n = 10000
 
 # Simulate the mixture
 samples = simulate_mixture_bivariate_laplace(pi, mu1, b1, Sigma1, mu2, b2, Sigma2, n)

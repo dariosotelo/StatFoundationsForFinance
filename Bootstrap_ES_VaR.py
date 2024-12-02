@@ -1024,202 +1024,252 @@ graph_difference(1.2, x_values)
 
 # b) 
 
-# This part i am using it later on
-# I think we should check this definition of the function
-def bivariate_discrete_laplace_logpdf(mean, scale, x):
+# # This part i am using it later on
+# # I think we should check this definition of the function
+# def bivariate_discrete_laplace_logpdf(mean, scale, x):
+#     """
+#     Log-probability density of the bivariate discrete Laplace distribution.
+#     Args:
+#         mean (tuple): (mu1, mu2), mean of the bivariate Laplace.
+#         scale (tuple): (b1, b2), scale parameters.
+#         x (array-like): Observed data points (n x 2 array).
+#     Returns:
+#         Log-probability density for each point in x.
+#     """
+#     mu1, mu2 = mean
+#     b1, b2 = scale
+#     print("X:",x)
+#     x1, x2 = x[:, 0], x[:, 1]
+#     return -np.abs(x1 - mu1) / b1 - np.abs(x2 - mu2) / b2 - np.log(2 * b1 * b2)
+
+
+# # Negative log-likelihood for the k=2 mixture model
+# def negative_log_likelihood_bvlp(params, x):
+#     """
+#     Negative log-likelihood for the k=2 component, d=2 discrete mixture of Laplace.
+#     Args:
+#         params: [w1, mu1_1, mu1_2, b1_1, b1_2, mu2_1, mu2_2, b2_1, b2_2]
+#                 where w1 is the weight of the first component, and the rest are
+#                 the parameters of the two components (means and scales).
+#         x: Observed bivariate data points (n x 2 array).
+#     Returns:
+#         Negative log-likelihood of the mixture model.
+#     """
+#     w1 = params[0]
+#     mu1 = (params[1], params[2])
+#     b1 = (params[3], params[4])
+#     mu2 = (params[5], params[6])
+#     b2 = (params[7], params[8])
+#     w2 = 1 - w1  # Enforce weight constraint
+
+#     # Compute log-probabilities for each component
+#     logpdf1 = bivariate_discrete_laplace_logpdf(mu1, b1, x)
+#     logpdf2 = bivariate_discrete_laplace_logpdf(mu2, b2, x)
+
+#     # Mixture log-likelihood
+#     log_likelihood = np.log(w1 * np.exp(logpdf1) + w2 * np.exp(logpdf2))
+#     return -np.sum(log_likelihood)  # Negative log-likelihood
+
+# # Generate synthetic data (mixture of two bivariate discrete Laplace distributions)
+
+# n_samples = 2000
+# data1 = np.random.randint(-5, 5, size=(n_samples // 2, 2))
+# data2 = np.random.randint(5, 15, size=(n_samples // 2, 2))
+# data = np.vstack([data1, data2])
+
+# # Initial guesses for parameters
+# initial_guess = [
+#     0.5,  # w1 (weight of the first component)
+#     0, 0,  # mu1 (mean of the first component)
+#     1, 1,  # b1 (scale of the first component)
+#     10, 10,  # mu2 (mean of the second component)
+#     1, 1  # b2 (scale of the second component)
+# ]
+
+# # Set parameter bounds (to mimic MATLAB constraints)
+# bounds = [
+#     (0.01, 0.99),  # w1 (weights must sum to 1)
+#     (-10, 10),     # mu1_1
+#     (-10, 10),     # mu1_2
+#     (0.1, 10),     # b1_1
+#     (0.1, 10),     # b1_2
+#     (-10, 20),     # mu2_1
+#     (-10, 20),     # mu2_2
+#     (0.1, 10),     # b2_1
+#     (0.1, 10)      # b2_2
+# ]
+
+# # Perform optimization using BFGS
+# result = minimize(
+#     fun=negative_log_likelihood_bvlp,
+#     x0=initial_guess,
+#     args=(data,),
+#     method='L-BFGS-B',
+#     bounds=bounds,
+#     options={'disp': True}
+# )
+
+# # Extract results
+# estimated_params = result.x
+# print("Estimated parameters:", estimated_params)
+
+# # Optional: Extract standard errors using the Hessian inverse
+# hessian_inv = result.hess_inv.todense() if hasattr(result.hess_inv, "todense") else result.hess_inv
+# standard_errors = np.sqrt(np.diag(hessian_inv)) if hessian_inv is not None else None
+# print("Standard errors:", standard_errors)
+
+import numpy as np
+from scipy.stats import multivariate_normal
+from scipy.special import kv, gamma as gamma_function
+from scipy.optimize import minimize
+
+# Define the bivariate Laplace density function
+def bivariate_laplace_density(y, mu, Sigma, b):
     """
-    Log-probability density of the bivariate discrete Laplace distribution.
-    Args:
-        mean (tuple): (mu1, mu2), mean of the bivariate Laplace.
-        scale (tuple): (b1, b2), scale parameters.
-        x (array-like): Observed data points (n x 2 array).
-    Returns:
-        Log-probability density for each point in x.
+    Computes the density of the bivariate Laplace distribution.
+
+    Inputs:
+        y     : 2x1 observation
+        mu    : 2x1 mean vector
+        Sigma : 2x2 positive-definite covariance matrix
+        b     : shape parameter of the Gamma distribution
+
+    Output:
+        fY : Density value at y
     """
-    mu1, mu2 = mean
-    b1, b2 = scale
-    print("X:",x)
-    x1, x2 = x[:, 0], x[:, 1]
-    return -np.abs(x1 - mu1) / b1 - np.abs(x2 - mu2) / b2 - np.log(2 * b1 * b2)
+    # Ensure inputs are numpy arrays
+    y = np.atleast_1d(y).reshape(-1)
+    mu = np.atleast_1d(mu).reshape(-1)
+    d = len(mu)  # Dimensionality of the data
 
+    # Compute Mahalanobis distance
+    diff = y - mu
+    z = diff.T @ np.linalg.inv(Sigma) @ diff
 
-# Negative log-likelihood for the k=2 mixture model
-def negative_log_likelihood_bvlp(params, x):
+    # Compute determinant of Sigma
+    detSigma = np.linalg.det(Sigma)
+
+    # Precompute constants
+    C1 = 1 / (np.sqrt(detSigma) * (2 * np.pi) ** (d / 2))
+    C2 = (2 / gamma_function(b)) * (z / 2) ** (b - d / 2 - 1)
+
+    # Compute the Bessel function term
+    Kterm = kv(b - d / 2, np.sqrt(2 * z))
+
+    # Handle potential numerical issues when z is very small or zero
+    if np.isnan(Kterm) or np.isinf(Kterm) or Kterm == 0.0:
+        Kterm = np.finfo(float).eps  # Smallest positive float number
+
+    # Final density value
+    fY = C1 * C2 * Kterm
+
+    # Ensure density is non-negative and finite
+    if fY < 0 or np.isnan(fY) or np.isinf(fY):
+        fY = np.finfo(float).eps
+
+    return fY
+
+# Define the log-likelihood function
+def log_likelihood(params, data):
     """
-    Negative log-likelihood for the k=2 component, d=2 discrete mixture of Laplace.
-    Args:
-        params: [w1, mu1_1, mu1_2, b1_1, b1_2, mu2_1, mu2_2, b2_1, b2_2]
-                where w1 is the weight of the first component, and the rest are
-                the parameters of the two components (means and scales).
-        x: Observed bivariate data points (n x 2 array).
-    Returns:
-        Negative log-likelihood of the mixture model.
+    Computes the negative log-likelihood for the mixture of two bivariate Laplace distributions.
+
+    Inputs:
+        params : Parameter vector
+        data   : Nx2 data matrix
+
+    Output:
+        logL : Negative log-likelihood value
     """
-    w1 = params[0]
-    mu1 = (params[1], params[2])
-    b1 = (params[3], params[4])
-    mu2 = (params[5], params[6])
-    b2 = (params[7], params[8])
-    w2 = 1 - w1  # Enforce weight constraint
+    # Extract parameters
+    mu1 = params[0:2]
+    mu2 = params[2:4]
+    sigma1 = np.array([[params[4], params[5]], [params[5], params[6]]])
+    sigma2 = np.array([[params[7], params[8]], [params[8], params[9]]])
+    b1 = params[10]
+    b2 = params[11]
+    lambda1 = 0.8
+    lambda2 = 0.2  # Mixing weights (fixed)
 
-    # Compute log-probabilities for each component
-    logpdf1 = bivariate_discrete_laplace_logpdf(mu1, b1, x)
-    logpdf2 = bivariate_discrete_laplace_logpdf(mu2, b2, x)
+    # Check if sigma1 and sigma2 are positive-definite
+    try:
+        np.linalg.cholesky(sigma1)
+    except np.linalg.LinAlgError:
+        return np.inf  # Return infinity if not positive-definite
 
-    # Mixture log-likelihood
-    log_likelihood = np.log(w1 * np.exp(logpdf1) + w2 * np.exp(logpdf2))
-    return -np.sum(log_likelihood)  # Negative log-likelihood
+    try:
+        np.linalg.cholesky(sigma2)
+    except np.linalg.LinAlgError:
+        return np.inf  # Return infinity if not positive-definite
 
-# Generate synthetic data (mixture of two bivariate discrete Laplace distributions)
+    # Ensure b1 and b2 are positive
+    if b1 <= 0 or b2 <= 0:
+        return np.inf
 
-n_samples = 2000
-data1 = np.random.randint(-5, 5, size=(n_samples // 2, 2))
-data2 = np.random.randint(5, 15, size=(n_samples // 2, 2))
-data = np.vstack([data1, data2])
+    # Number of observations
+    n = data.shape[0]
 
-# Initial guesses for parameters
-initial_guess = [
-    0.5,  # w1 (weight of the first component)
-    0, 0,  # mu1 (mean of the first component)
-    1, 1,  # b1 (scale of the first component)
-    10, 10,  # mu2 (mean of the second component)
-    1, 1  # b2 (scale of the second component)
-]
+    # Compute densities for all data points
+    f1 = np.array([bivariate_laplace_density(data[i], mu1, sigma1, b1) for i in range(n)])
+    f2 = np.array([bivariate_laplace_density(data[i], mu2, sigma2, b2) for i in range(n)])
+    f_mix = lambda1 * f1 + lambda2 * f2
 
-# Set parameter bounds (to mimic MATLAB constraints)
-bounds = [
-    (0.01, 0.99),  # w1 (weights must sum to 1)
-    (-10, 10),     # mu1_1
-    (-10, 10),     # mu1_2
-    (0.1, 10),     # b1_1
-    (0.1, 10),     # b1_2
-    (-10, 20),     # mu2_1
-    (-10, 20),     # mu2_2
-    (0.1, 10),     # b2_1
-    (0.1, 10)      # b2_2
-]
+    # To prevent log of zero, add a small epsilon
+    epsilon = 1e-10
+    f_mix[f_mix < epsilon] = epsilon
 
-# Perform optimization using BFGS
-result = minimize(
-    fun=negative_log_likelihood_bvlp,
-    x0=initial_guess,
-    args=(data,),
-    method='L-BFGS-B',
-    bounds=bounds,
-    options={'disp': True}
-)
+    # Compute the negative log-likelihood
+    logL = -np.sum(np.log(f_mix))
+    return logL
 
-# Extract results
-estimated_params = result.x
-print("Estimated parameters:", estimated_params)
+# Generate the data for the mixture model
+n = 10000  # Total number of data points
+lambda_ = 0.8  # Mixing weight for Component 1
+mu1 = np.array([0, 0])
+mu2 = np.array([3, 3])  # Mean vectors
+sigma1 = np.array([[1, 0.5], [0.5, 1]])  # Covariance matrix for Component 1
+sigma2 = np.array([[4, 0.3], [0.3, 4]])  # Covariance matrix for Component 2
+b1 = 5
+b2 = 10  # Shape parameters for Gamma distribution
 
-# Optional: Extract standard errors using the Hessian inverse
-hessian_inv = result.hess_inv.todense() if hasattr(result.hess_inv, "todense") else result.hess_inv
-standard_errors = np.sqrt(np.diag(hessian_inv)) if hessian_inv is not None else None
-print("Standard errors:", standard_errors)
+# Assign each data point to a component based on the mixing weight lambda
+component = np.random.rand(n) < lambda_
 
+# Number of points in each component
+n1 = np.sum(component)
+n2 = n - n1
 
-# This part is to test if the function is approximating correctly the distribution
-def generate_bivariate_discrete_laplace(n, w1, mu1, b1, mu2, b2):
-    """
-    Generate synthetic data from a k=2 bivariate discrete mixture of Laplace.
-    Args:
-        n: Number of samples.
-        w1: Weight of the first component.
-        mu1: Mean vector of the first component.
-        b1: Scale parameters of the first component.
-        mu2: Mean vector of the second component.
-        b2: Scale parameters of the second component.
-    Returns:
-        Synthetic bivariate data (n x 2 array).
-    """
-    data = np.zeros((n, 2))
-    for i in range(n):
-        # Randomly choose component based on weights
-        if np.random.rand() < w1:
-            # Component 1
-            data[i, 0] = np.random.laplace(mu1[0], b1[0])
-            data[i, 1] = np.random.laplace(mu1[1], b1[1])
-        else:
-            # Component 2
-            data[i, 0] = np.random.laplace(mu2[0], b2[0])
-            data[i, 1] = np.random.laplace(mu2[1], b2[1])
-    return data
+# Generate data for Component 1
+C1 = np.random.gamma(b1, 1, size=n1)
+data1 = np.array([np.random.multivariate_normal(mu1, C1[i] * sigma1) for i in range(n1)])
 
-# True parameters
-w1_true = 0.6
-mu1_true = [1, 2]
-b1_true = [6, 6]
-mu2_true = [5, 6]
-b2_true = [2, 2]
+# Generate data for Component 2
+C2 = np.random.gamma(b2, 1, size=n2)
+data2 = np.array([np.random.multivariate_normal(mu2, C2[i] * sigma2) for i in range(n2)])
 
-# Generate synthetic data
-n_samples = 10000
-data = generate_bivariate_discrete_laplace(
-    n=n_samples, w1=w1_true, mu1=mu1_true, b1=b1_true, mu2=mu2_true, b2=b2_true
-)
+# Combine and shuffle data
+data = np.vstack((data1, data2))
+np.random.shuffle(data)
 
-# Initial guesses for parameters
-initial_guess = [
-    0.5,  # w1
-    0, 0,  # mu1
-    1, 1,  # b1
-    10, 10,  # mu2
-    1, 1  # b2
-]
+# Initial parameter guesses
+init_params = np.array([0, 0, 2, 2, 1, 0.5, 1, 4, 0.3, 4, 5, 10])
 
-# Set bounds
-bounds = [
-    (0.01, 0.99),  # w1
-    (-10, 10),     # mu1_1
-    (-10, 10),     # mu1_2
-    (0.1, 10),     # b1_1
-    (0.1, 10),     # b1_2
-    (-10, 20),     # mu2_1
-    (-10, 20),     # mu2_2
-    (0.1, 10),     # b2_1
-    (0.1, 10)      # b2_2
-]
+# Define optimization options for BFGS
+options = {'maxiter': 300, 'disp': True}
 
+# Define the objective function (negative log-likelihood)
+objective = lambda params: log_likelihood(params, data)
 
-# This is the important optimization part
-# Perform optimization using the earlier code
+# Perform the optimization
+result = minimize(objective, init_params, method='BFGS', options=options)
 
-result = minimize(
-    fun=negative_log_likelihood_bvlp,
-    x0=initial_guess,
-    args=(data,),
-    method='L-BFGS-B',
-    bounds=bounds,
-    options={'disp': True}
-)
-
-print(result.fun)
-
-# Extract results
-estimated_params = result.x
-print("\nEstimated Parameters:")
-print(f"w1: {estimated_params[0]}")
-print(f"mu1: {estimated_params[1:3]}")
-print(f"b1: {estimated_params[3:5]}")
-print(f"mu2: {estimated_params[5:7]}")
-print(f"b2: {estimated_params[7:9]}")
-
-# Compare with true parameters
-print("\nTrue Parameters vs Estimated Parameters:")
-print(f"True w1: {w1_true}, Estimated w1: {estimated_params[0]}")
-print(f"True mu1: {mu1_true}, Estimated mu1: {estimated_params[1:3]}")
-print(f"True b1: {b1_true}, Estimated b1: {estimated_params[3:5]}")
-print(f"True mu2: {mu2_true}, Estimated mu2: {estimated_params[5:7]}")
-print(f"True b2: {b2_true}, Estimated b2: {estimated_params[7:9]}")
-
-# Calculate differences
-print("\nDifferences:")
-print(f"w1 difference: {abs(w1_true - estimated_params[0])}")
-print(f"mu1 difference: {np.abs(np.array(mu1_true) - estimated_params[1:3])}")
-print(f"b1 difference: {np.abs(np.array(b1_true) - estimated_params[3:5])}")
-print(f"mu2 difference: {np.abs(np.array(mu2_true) - estimated_params[5:7])}")
-print(f"b2 difference: {np.abs(np.array(b2_true) - estimated_params[7:9])}")
+# Output the results
+optimal_params = result.x
+print('mu1, mu2, Sigma1, Sigma2, b1, b2:')
+print('Optimal Parameters:')
+print(optimal_params)
+print('Final Log-Likelihood:')
+print(-result.fun)
 
 
 # It is not a good estimation, something must be checked, maybe our x_0 should be closer to the real values?
@@ -1547,14 +1597,16 @@ def compute_aic_bic_laplace(log_likelihood, num_params, num_data):
     bic = -2 * log_likelihood + num_params * np.log(num_data)
     return aic, bic
 
-result_stock = minimize(
-    fun=negative_log_likelihood_bvlp,
-    x0=initial_guess,
-    args=(data,),
-    method='L-BFGS-B',
-    bounds=bounds,
-    options={'disp': True}
-)
+# Initial parameter guesses
+init_params = np.array([0, 0, 2, 2, 1, 0.5, 1, 4, 0.3, 4, 5, 10])
+
+# Define optimization options for BFGS
+options = {'maxiter': 300, 'disp': True}
+
+# Define the objective function (negative log-likelihood)
+objective = lambda params: log_likelihood(params, data)
+
+result_stock = minimize(objective, init_params, method='BFGS', options=options)
 
 lap_nll_stock = result_stock.fun
 
@@ -1563,12 +1615,19 @@ num_params_laplace_stock = len(result_stock.x)
 num_data_stock = data.shape[1]
 
 # Compute AIC and BIC for Laplace MLE
-aic_laplace_s, bic_laplace_s = compute_aic_bic_laplace(-lap_nll_stock, num_params_laplace_stock, num_data_stock)
+aic_laplace_s, bic_laplace_s = compute_aic_bic_laplace(lap_nll_stock, num_params_laplace_stock, num_data_stock)
+param, stderr, iters, loglik_stock, Varcov = MVNCT2estimation(data)
+num_params_t_stock = len(param)
+
+# Number of data points
+num_data_t_stock = samples.shape[1]
+
 
 
 
 # Generate random 10000 by 2 data points
-samples = np.random.randn(10000, 2)
+np.random.seed(42)
+samples = np.random.randn(9500, 2)
 
 # Assuming you have already implemented the mvnctpdfln and MVNCT2estimation functions
 param, stderr, iters, loglik, Varcov = MVNCT2estimation(samples)
@@ -1578,36 +1637,29 @@ print('Standard Errors:')
 print(stderr)
 print(-loglik)
 
-result = minimize(
-    fun=negative_log_likelihood_bvlp,
-    x0=initial_guess,
-    args=(samples,),
-    method='L-BFGS-B',
-    bounds=bounds,
-    options={'disp': True}
-)
+# Initial parameter guesses
+init_params = np.array([0, 0, 2, 2, 1, 0.5, 1, 4, 0.3, 4, 5, 10])
 
-lap_nll= result.fun
+# Define optimization options for BFGS
+options = {'maxiter': 300, 'disp': True}
 
-# Compute AIC and BIC for the Laplace MLE parameters
-def compute_aic_bic_laplace(log_likelihood, num_params, num_data):
-    aic = -2 * log_likelihood + 2 * num_params
-    bic = -2 * log_likelihood + num_params * np.log(num_data)
-    return aic, bic
+# Define the objective function (negative log-likelihood)
+objective = lambda params: log_likelihood(params, samples)
 
-# Number of parameters estimated for Laplace MLE
-num_params_laplace = len(result.x)
+# result = minimize(objective, init_params, method='BFGS', options=options)
+# lap_nll= -result.fun
+# # Number of parameters estimated for Laplace MLE
+# num_params_laplace = len(result.x)
 
-num_data = samples.shape[1]
+# num_data = samples.shape[1]
 
-# Compute AIC and BIC for Laplace MLE
-aic_laplace, bic_laplace = compute_aic_bic_laplace(-lap_nll, num_params_laplace, num_data)
+# # Compute AIC and BIC for Laplace MLE
+# aic_laplace, bic_laplace = compute_aic_bic_laplace(lap_nll, num_params_laplace, num_data)
 
-print(f"AIC (Laplace): {aic_laplace}")
-print(f"BIC (Laplace): {bic_laplace}")
-
-print(f"AIC (Laplace) stock: {aic_laplace_s}")
-print(f"BIC (Laplace) stock: {bic_laplace_s}")
+# print(f"AIC (Laplace): {aic_laplace}")
+# print(f"BIC (Laplace): {bic_laplace}")
+# print(f"AIC (Laplace) stock: {aic_laplace_s}")
+# print(f"BIC (Laplace) stock: {bic_laplace_s}")
 # Compute AIC and BIC for the MLE parameters
 def compute_aic_bic_nct(log_likelihood, num_params, num_data):
     aic = -2 * log_likelihood + 2 * num_params
@@ -1621,10 +1673,14 @@ num_params = len(param)
 num_data = samples.shape[1]
 
 # Compute AIC and BIC
-aic, bic = compute_aic_bic_nct(loglik, num_params, num_data)
+aic, bic = compute_aic_bic_nct(-loglik, num_params, num_data)
+# Compute AIC and BIC
+aic_stock, bic_stock = compute_aic_bic_nct(-loglik_stock, num_params_t_stock, num_data_t_stock)
+print(f"AIC t: {aic}")
+print(f"BIC t: {bic}")
+print(f"AIC t stock: {aic_stock}")
+print(f"BIC t stock: {bic_stock}")
 
-print(f"AIC: {aic}")
-print(f"BIC: {bic}")
 
 #This version is a not robust one of the previous
 #%%

@@ -15,6 +15,7 @@ Created on Fri Nov 29 14:55:03 2024
 """
 
 # Libraries
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -24,7 +25,11 @@ import scipy.special as sp
 from scipy.optimize import minimize
 from scipy.special import gammaln, gamma, kv
 from scipy.linalg import cholesky, solve_triangular
-
+from scipy.optimize import minimize
+from scipy.linalg import inv, eigvals
+from scipy.stats import chi2
+from tqdm import tqdm
+import pandas as pd
 
 #%% II.1
 
@@ -160,7 +165,7 @@ def compute_mle_bivariate_discrete_mixture_laplace(data):
         method='L-BFGS-B',
         bounds = bounds_x0
     )
-    return result.x
+    return result
 
 
 def bivariate_discrete_laplace_pdf(location, scale, Sigma, y):
@@ -301,14 +306,17 @@ params = np.array([
 # Generate synthetic data
 T = 10000
 data = generate_bivariate_discrete_laplace_with_sigma_param(T, params)
+#data = np.random.rand(T, 2)
+results_1 = compute_mle_bivariate_discrete_mixture_laplace(data)
+mle_params_lap=results_1.x
 
-mle_params = compute_mle_bivariate_discrete_mixture_laplace(data)
+print(mle_params_lap)
 
-loc1 = mle_params[:2]  # Location vector for component 1
-loc2 = mle_params[2:4]  # Location vector for component 2
-scale1, scale2 = mle_params[4:6]  # Scale parameters
-Sigma1 = np.array([[mle_params[6], mle_params[7]], [mle_params[7], mle_params[8]]])  # Covariance matrix for component 1
-Sigma2 = np.array([[mle_params[9], mle_params[10]], [mle_params[10], mle_params[11]]])  # Covariance matrix for component 2
+loc1 = mle_params_lap[:2]  # Location vector for component 1
+loc2 = mle_params_lap[2:4]  # Location vector for component 2
+scale1, scale2 = mle_params_lap[4:6]  # Scale parameters
+Sigma1 = np.array([[mle_params_lap[6], mle_params_lap[7]], [mle_params_lap[7], mle_params_lap[8]]])  # Covariance matrix for component 1
+Sigma2 = np.array([[mle_params_lap[9], mle_params_lap[10]], [mle_params_lap[10], mle_params_lap[11]]])  # Covariance matrix for component 2
 #weight1 = mle_params[12]  # Mixture weight for component 1
 weight1 = 0.6
 weight2 = 1 - weight1  # Mixture weight for component 2
@@ -324,6 +332,20 @@ print(f"Covariance Matrix for Component 2:\n{Sigma2}")
 print(f"Weight for Component 1: {weight1:.4f}")
 print(f"Weight for Component 2: {weight2:.4f}")
 
+
+def compute_aic_bic_laplace(log_likelihood, num_params, num_data):
+    aic = -2 * log_likelihood + 2 * num_params
+    bic = -2 * log_likelihood + num_params * np.log(num_data)
+    return aic, bic
+
+# Compute AIC and BIC
+n_params = len(mle_params_lap)
+log_likelihood=results_1.fun
+print(log_likelihood)
+aic, bic = compute_aic_bic_laplace(log_likelihood, n_params, T)
+
+print(f"AIC Lap: {aic:.4f}")
+print(f"BIC Lap: {bic:.4f}")
 
 #%% II.3
 
@@ -429,8 +451,174 @@ def slog(x):
     x_clipped = np.clip(x, realmin, realmax)
     return np.log(x_clipped)
 
+def transform_param_bounded_to_unbounded(param_bounded, bound):
+    """
+    Transforms parameters from bounded space to unbounded space for optimization.
+    """
+    param_unbounded = np.copy(param_bounded)
+    for i in range(len(param_bounded)):
+        if bound['which'][i]:
+            lo = bound['lo'][i]
+            hi = bound['hi'][i]
+            p = param_bounded[i]
+            # Apply logit transformation
+            p_std = (p - lo) / (hi - lo)
+            p_std = np.clip(p_std, 1e-8, 1 - 1e-8)  # Avoid division by zero or log(0)
+            param_unbounded[i] = np.log(p_std / (1 - p_std))
+        else:
+            # Unbounded parameter
+            param_unbounded[i] = param_bounded[i]
+    return param_unbounded
 
+def transform_param_unbounded_to_bounded(param_unbounded, bound):
+    """
+    Transforms parameters from unbounded space back to bounded space after optimization.
+    """
+    param_bounded = np.copy(param_unbounded)
+    for i in range(len(param_unbounded)):
+        if bound['which'][i]:
+            lo = bound['lo'][i]
+            hi = bound['hi'][i]
+            u = param_unbounded[i]
+            # Apply inverse logit transformation
+            exp_u = np.exp(u)
+            p_std = exp_u / (1 + exp_u)
+            param_bounded[i] = lo + p_std * (hi - lo)
+        else:
+            # Unbounded parameter
+            param_bounded[i] = param_unbounded[i]
+    return param_bounded
 
+def compute_jacobian(param_unbounded, bound):
+    """
+    Computes the Jacobian matrix of the transformation from unbounded to bounded parameters.
+    """
+    n_params = len(param_unbounded)
+    jacobian = np.eye(n_params)
+    for i in range(n_params):
+        if bound['which'][i]:
+            lo = bound['lo'][i]
+            hi = bound['hi'][i]
+            u = param_unbounded[i]
+            # Derivative of the inverse logit transformation
+            exp_u = np.exp(u)
+            denom = (1 + exp_u)**2
+            jacobian[i, i] = (hi - lo) * exp_u / denom
+        else:
+            # Unbounded parameter
+            jacobian[i, i] = 1
+    return jacobian
+
+def MVNCTloglik(param_unbounded, x, bound):
+    """
+    Computes the negative log-likelihood for optimization.
+    """
+    # Transform parameters to bounded space
+    param = transform_param_unbounded_to_bounded(param_unbounded, bound)
+    
+    k = param[0]
+    mu = param[1:3]
+    scale = param[3:5]
+    R12 = param[5]
+    gam = param[6:8]
+    
+    # Construct correlation matrix R
+    R = np.array([[1, R12], [R12, 1]])
+    # Check if R is positive definite
+    if np.min(eigvals(R)) < 1e-4:
+        return 1e5  # Large penalty for invalid R
+    
+    # Standardize input data
+    xx = (x - mu[:, np.newaxis]) / scale[:, np.newaxis]
+    
+    # Compute log-likelihood vector
+    try:
+        llvec = mvnctpdfln(xx, mu, gam, k, R) - np.log(np.prod(scale))
+        ll = -np.mean(llvec)
+    except Exception:
+        ll = 1e5  # Large penalty for numerical errors
+        return ll
+    
+    if np.isinf(ll) or np.isnan(ll):
+        ll = 1e5  # Penalty for infinite or NaN log-likelihood
+    return ll
+
+def MVNCT2estimation(x):
+    x = np.asarray(x)
+    T, d = x.shape  # Extract new shape (1000, 2)
+    if d != 2:
+        x = x.T
+        T, d = x.shape
+        #raise ValueError('Not implemented for dimensions other than 2.')
+
+    # Transpose the data to match the original shape (2, T)
+    x = x.T  # Now x is 2 x T
+
+    # Define bounds and initial parameters
+    bound = {
+        'lo': np.array([1.1, -1, -1, 0.01, 0.01, -1, -4, -4]),
+        'hi': np.array([20, 1, 1, 100, 100, 1, 4, 4]),
+        'which': np.array([1, 0, 0, 1, 1, 1, 1, 1], dtype=bool)
+    }
+    initvec = np.array([3, 0, 0, 0.5, 0.5, 0, 0, 0])
+
+    # Transform initial parameters to unbounded space
+    initvec_unbounded = transform_param_bounded_to_unbounded(initvec, bound)
+
+    # Optimization parameters
+    maxiter = 300
+    tol = 1e-6
+
+    # Optimization using minimize
+    result = minimize(
+        fun=MVNCTloglik,
+        x0=initvec_unbounded,
+        args=(x, bound),
+        method='BFGS',
+        options={'disp': True, 'maxiter': maxiter, 'gtol': tol}
+    )
+
+    pout_unbounded = result.x
+    fval = result.fun
+    hess_inv = result.hess_inv  # Approximate inverse Hessian
+    iters = result.nit  # Number of iterations
+
+    # Transform parameters back to bounded space
+    param = transform_param_unbounded_to_bounded(pout_unbounded, bound)
+
+    # Compute variance-covariance matrix
+    # Adjust the covariance matrix due to parameter transformations
+    jacobian = compute_jacobian(pout_unbounded, bound)
+    Varcov_unbounded = hess_inv / T
+    Varcov = jacobian @ Varcov_unbounded @ jacobian.T
+
+    stderr = np.sqrt(np.diag(Varcov))
+    loglik = -fval * T
+    return param, stderr, iters, loglik, Varcov
+
+T = 10000
+np.random.seed(42)
+data_new = np.random.rand(10000, 2)
+mle_param_t, stderr, iters, loglik_stock, Varcov = MVNCT2estimation(data_new)
+
+results_2 = compute_mle_bivariate_discrete_mixture_laplace(data_new)
+mle_params_lap=results_2.x
+
+n_params_lap = len(mle_params_lap)
+ll=results_2.fun
+print(ll)
+aic_lap, bic_lap = compute_aic_bic_laplace(ll, n_params_lap, T)
+
+print(f"AIC Lap: {aic_lap:.4f}")
+print(f"BIC Lap: {bic_lap:.4f}")
+
+# Compute AIC and BIC
+n_params_t = len(mle_param_t)
+print(loglik_stock)
+aic_t, bic_t = compute_aic_bic_laplace(-loglik_stock, n_params_t, T)
+
+print(f"AIC t: {aic_t:.4f}")
+print(f"BIC t: {bic_t:.4f}")
 
 #%% helpful junk 2
 
@@ -531,6 +719,7 @@ print_mle_results(mle_params)
 
 
 import numpy as np
+import random
 
 def generate_bivariate_discrete_laplace_with_sigma(n, param, loc1, loc2, scale1, scale2, Sigma111, Sigma112, Sigma122, Sigma211, Sigma212, Sigma222, w1):
     """
